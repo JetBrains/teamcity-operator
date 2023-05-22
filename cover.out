@@ -1,0 +1,5 @@
+mode: set
+git.jetbrains.team/tch/teamcity-operator/internal/controller/teamcity_controller.go:51.100,57.66 4 1
+git.jetbrains.team/tch/teamcity-operator/internal/controller/teamcity_controller.go:57.66,60.3 2 0
+git.jetbrains.team/tch/teamcity-operator/internal/controller/teamcity_controller.go:61.2,65.27 2 1
+git.jetbrains.team/tch/teamcity-operator/internal/controller/teamcity_controller.go:69.71,74.2 1 1

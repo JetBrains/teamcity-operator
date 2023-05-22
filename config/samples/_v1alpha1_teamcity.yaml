@@ -1,0 +1,12 @@
+apiVersion: jetbrains.com/v1alpha1
+kind: TeamCity
+metadata:
+  labels:
+    app.kubernetes.io/name: teamcity
+    app.kubernetes.io/instance: teamcity-sample
+    app.kubernetes.io/part-of: teamcity-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: teamcity-operator
+  name: teamcity-sample
+spec:
+  image: jetbrains/teamcity-server
