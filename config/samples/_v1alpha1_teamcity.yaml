@@ -8,5 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: teamcity-operator
   name: teamcity-sample
+  namespace: default
 spec:
-  image: jetbrains/teamcity-server
+  image: nginx
+  replicas: 0

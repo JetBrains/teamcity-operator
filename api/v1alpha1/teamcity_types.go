@@ -29,7 +29,8 @@ type TeamCitySpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of TeamCity. Edit teamcity_types.go to remove/update
-	Image string `json:"image"`
+	Image    string `json:"image"`
+	Replicas int32  `json:"replicas"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity

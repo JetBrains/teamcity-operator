@@ -39,8 +39,12 @@ spec:
                 description: Foo is an example field of TeamCity. Edit teamcity_types.go
                   to remove/update
                 type: string
+              replicas:
+                format: int32
+                type: integer
             required:
             - image
+            - replicas
             type: object
           status:
             description: TeamCityStatus defines the observed state of TeamCity

@@ -19,7 +19,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/apps/v1"
+	v12 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,7 +46,6 @@ type TeamcityReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
 // the TeamCity object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -60,8 +64,33 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	log.Info(fmt.Sprintf("Found object %s in namespace %s.", teamcity.Name, teamcity.Namespace))
 
-	// TODO(user): your logic here
+	desiredStatefulSet := &v1.StatefulSet{}
+	desiredStatefulSet.Name = req.Name
+	desiredStatefulSet.Namespace = req.Namespace
+	desiredStatefulSet.Spec.Template.Spec.Containers = []v12.Container{}
+	desiredStatefulSet.Spec.Template.Spec.Containers = append(desiredStatefulSet.Spec.Template.Spec.Containers, v12.Container{})
+	desiredStatefulSet.Spec.Template.Spec.Containers[0].Image = teamcity.Spec.Image
+	desiredStatefulSet.Spec.Replicas = &teamcity.Spec.Replicas
+	if err := controllerutil.SetControllerReference(&teamcity, desiredStatefulSet, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
 
+	foundStatefulSet := &v1.StatefulSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: desiredStatefulSet.Name, Namespace: desiredStatefulSet.Namespace}, foundStatefulSet)
+	if err != nil && errors.IsNotFound(err) {
+		log.V(1).Info("Creating StatefulSet", "StatefulSet", desiredStatefulSet.Name)
+		err = r.Create(ctx, desiredStatefulSet)
+	} else if err == nil {
+		if foundStatefulSet.Spec.Template.Spec.Containers[0].Image != desiredStatefulSet.Spec.Template.Spec.Containers[0].Image {
+			foundStatefulSet.Spec.Template.Spec.Containers[0].Image = desiredStatefulSet.Spec.Template.Spec.Containers[0].Image
+		}
+		if foundStatefulSet.Spec.Replicas != desiredStatefulSet.Spec.Replicas {
+			foundStatefulSet.Spec.Replicas = desiredStatefulSet.Spec.Replicas
+		}
+		log.V(1).Info("Updating StatefulSet", "StatefulSet", desiredStatefulSet.Name)
+		err = r.Update(ctx, foundStatefulSet)
+
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -69,6 +98,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&jetbrainscomv1alpha1.TeamCity{}).
+		Owns(&v1.StatefulSet{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }
