@@ -18,21 +18,20 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
-	v12 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 )
+
+const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
 
 // TeamcityReconciler reconciles a TeamCity object
 type TeamcityReconciler struct {
@@ -55,40 +54,42 @@ type TeamcityReconciler struct {
 func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	log.Info(fmt.Sprintf("Reconciling object: %s.", req.Name))
-
 	var teamcity jetbrainscomv1alpha1.TeamCity
 	if err := r.Get(ctx, req.NamespacedName, &teamcity); err != nil {
-		log.Error(err, "unable to fetch TeamCity")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	log.Info(fmt.Sprintf("Found object %s in namespace %s.", teamcity.Name, teamcity.Namespace))
 
-	desiredStatefulSet := &v1.StatefulSet{}
-	desiredStatefulSet.Name = req.Name
-	desiredStatefulSet.Namespace = req.Namespace
-	desiredStatefulSet.Spec.Template.Spec.Containers = []v12.Container{}
-	desiredStatefulSet.Spec.Template.Spec.Containers = append(desiredStatefulSet.Spec.Template.Spec.Containers, v12.Container{})
-	desiredStatefulSet.Spec.Template.Spec.Containers[0].Image = teamcity.Spec.Image
-	desiredStatefulSet.Spec.Replicas = &teamcity.Spec.Replicas
-	if err := controllerutil.SetControllerReference(&teamcity, desiredStatefulSet, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
+	if isMarkedForDeletion {
+		if err := r.finalizeTeamCity(log, &teamcity); err != nil {
+			return ctrl.Result{}, err
+		}
+		controllerutil.RemoveFinalizer(&teamcity, teamcityFinalizer)
+		err := r.Update(ctx, &teamcity)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
-	foundStatefulSet := &v1.StatefulSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: desiredStatefulSet.Name, Namespace: desiredStatefulSet.Namespace}, foundStatefulSet)
-	if err != nil && errors.IsNotFound(err) {
-		log.V(1).Info("Creating StatefulSet", "StatefulSet", desiredStatefulSet.Name)
-		err = r.Create(ctx, desiredStatefulSet)
-	} else if err == nil {
-		if foundStatefulSet.Spec.Template.Spec.Containers[0].Image != desiredStatefulSet.Spec.Template.Spec.Containers[0].Image {
-			foundStatefulSet.Spec.Template.Spec.Containers[0].Image = desiredStatefulSet.Spec.Template.Spec.Containers[0].Image
+	resourceBuilder := resource.TeamCityResourceBuilder{
+		Instance: &teamcity,
+		Scheme:   r.Scheme,
+	}
+	builders := resourceBuilder.ResourceBuilders()
+
+	for _, builder := range builders {
+		resource, err := builder.Build()
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		if foundStatefulSet.Spec.Replicas != desiredStatefulSet.Spec.Replicas {
-			foundStatefulSet.Spec.Replicas = desiredStatefulSet.Spec.Replicas
+		operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
+			return builder.Update(resource)
+		})
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		log.V(1).Info("Updating StatefulSet", "StatefulSet", desiredStatefulSet.Name)
-		err = r.Update(ctx, foundStatefulSet)
+		log.Info(string(operationResult))
 
 	}
 	return ctrl.Result{}, nil
@@ -99,6 +100,11 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&jetbrainscomv1alpha1.TeamCity{}).
 		Owns(&v1.StatefulSet{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
+}
+
+func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
+	log.Info("Successfully finalized TeamCity")
+	return nil
 }
