@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
@@ -56,17 +57,22 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	var teamcity jetbrainscomv1alpha1.TeamCity
 	if err := r.Get(ctx, req.NamespacedName, &teamcity); err != nil {
+		log.V(1).Info("Could not get TeamCity object. Ignoring")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
 	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
 	if isMarkedForDeletion {
+		log.V(1).Info("TeamCity object is marked for deletion")
 		if err := r.finalizeTeamCity(log, &teamcity); err != nil {
+			log.V(1).Error(err, "Failed to finalize TeamCity object")
 			return ctrl.Result{}, err
 		}
+		log.V(1).Info("TeamCity object is finalized")
 		controllerutil.RemoveFinalizer(&teamcity, teamcityFinalizer)
+		log.V(1).Info("Finalizer is removed from TeamCity object")
 		err := r.Update(ctx, &teamcity)
 		if err != nil {
+			log.V(1).Error(err, "Failed to update TeamCity object")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -87,9 +93,10 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return builder.Update(resource)
 		})
 		if err != nil {
+			log.V(1).Error(err, "Failed to update resource")
 			return ctrl.Result{}, err
 		}
-		log.Info(string(operationResult))
+		log.V(1).Info(fmt.Sprintf("Reconcilation result for TeamCity object is %s", operationResult))
 
 	}
 	return ctrl.Result{}, nil
@@ -105,6 +112,6 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
-	log.Info("Successfully finalized TeamCity")
+	log.V(1).Info("Ran finalizers TeamCity object successfully")
 	return nil
 }
