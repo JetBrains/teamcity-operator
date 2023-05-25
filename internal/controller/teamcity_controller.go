@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,7 +38,8 @@ const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
 // TeamcityReconciler reconciles a TeamCity object
 type TeamcityReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Clientset *kubernetes.Clientset
+	Scheme    *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=jetbrains.com,resources=teamcities,verbs=get;list;watch;create;update;patch;delete

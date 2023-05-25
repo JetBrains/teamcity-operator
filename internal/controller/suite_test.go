@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"k8s.io/client-go/kubernetes"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
@@ -45,6 +46,7 @@ var k8sClient client.Client
 var ctx context.Context
 var cancel context.CancelFunc
 var testEnv *envtest.Environment
+var clientSet *kubernetes.Clientset
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -82,9 +84,13 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
+	clientSet, err = kubernetes.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
+
 	err = (&TeamcityReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:    k8sManager.GetClient(),
+		Scheme:    k8sManager.GetScheme(),
+		Clientset: clientSet,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

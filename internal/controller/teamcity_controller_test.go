@@ -5,8 +5,10 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var _ = Describe("TeamCity controller", func() {
@@ -15,12 +17,12 @@ var _ = Describe("TeamCity controller", func() {
 		TeamCityNamespace = "default"
 		TeamCityImage     = "jetbrains/teamcity-server:latest"
 	)
+	var TeamCityReplicas = int32(0)
+	var teamcity *v1alpha1.TeamCity
 
-	Context("In the beginning", func() {
-		It("Should be able to create new TeamCity", func() {
-			By("By creating a new TeamCity resource")
-			ctx := context.Background()
-			object := &v1alpha1.TeamCity{
+	Context("TeamCity controller test", func() {
+		BeforeEach(func() {
+			teamcity = &v1alpha1.TeamCity{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "jetbrains.com/v1alpha1",
 					Kind:       "TeamCity",
@@ -30,12 +32,46 @@ var _ = Describe("TeamCity controller", func() {
 					Namespace: TeamCityNamespace,
 				},
 				Spec: v1alpha1.TeamCitySpec{
-					Image: TeamCityImage,
+					Image:    TeamCityImage,
+					Replicas: &TeamCityReplicas,
 				},
 			}
-			time.Sleep(10 * time.Second)
-			Expect(k8sClient.Create(ctx, object)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(k8sClient.Delete(ctx, teamcity)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: teamcity.Name, Namespace: teamcity.Namespace}, teamcity)
+				return errors.IsNotFound(err)
+			}, 5).Should(BeTrue())
+		})
+
+		It("should successfully reconcile a operand", func() {
+			By("setting operand properties correctly", func() {
+				fetchedTeamCity := &v1alpha1.TeamCity{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: TeamCityName, Namespace: TeamCityNamespace}, fetchedTeamCity)).To(Succeed())
+				Expect(fetchedTeamCity.Spec.Image).To(Equal(TeamCityImage))
+				Expect(fetchedTeamCity.Spec.Replicas).To(Equal(&TeamCityReplicas))
+			})
+			By("creating statefulset with operand properties", func() {
+				var producedStatefulSet *v1.StatefulSet
+				producedStatefulSet = statefulSet(ctx, teamcity)
+				Expect(producedStatefulSet.Spec.Template.Spec.Containers[0].Image).To(Equal(TeamCityImage))
+				Expect(producedStatefulSet.Spec.Replicas).To(Equal(&TeamCityReplicas))
+			})
 		})
 
 	})
+
 })
+
+func statefulSet(ctx context.Context, teamcity *v1alpha1.TeamCity) *v1.StatefulSet {
+	var statefulSet *v1.StatefulSet
+	EventuallyWithOffset(1, func() error {
+		var err error
+		statefulSet, err = clientSet.AppsV1().StatefulSets(teamcity.Namespace).Get(ctx, teamcity.Name, metav1.GetOptions{})
+		return err
+	}, 10).Should(Succeed())
+	return statefulSet
+}

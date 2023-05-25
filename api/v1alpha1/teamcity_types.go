@@ -30,7 +30,7 @@ type TeamCitySpec struct {
 
 	// Foo is an example field of TeamCity. Edit teamcity_types.go to remove/update
 	Image    string `json:"image"`
-	Replicas int32  `json:"replicas"`
+	Replicas *int32 `json:"replicas"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity
