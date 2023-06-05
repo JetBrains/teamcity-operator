@@ -58,7 +58,7 @@ make run
 ```
 
 ## Debug
-Use provided 
+Use run configuration `Run controller` in Run or Debug mode
 
 ## Test
 
