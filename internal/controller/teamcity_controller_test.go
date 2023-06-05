@@ -38,7 +38,6 @@ var _ = Describe("TeamCity controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())
 		})
-
 		AfterEach(func() {
 			Expect(k8sClient.Delete(ctx, teamcity)).To(Succeed())
 			Eventually(func() bool {
@@ -47,7 +46,7 @@ var _ = Describe("TeamCity controller", func() {
 			}, 5).Should(BeTrue())
 		})
 
-		It("should successfully reconcile a operand", func() {
+		It("should successfully reconcile an operand", func() {
 			By("setting operand properties correctly", func() {
 				fetchedTeamCity := &v1alpha1.TeamCity{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: TeamCityName, Namespace: TeamCityNamespace}, fetchedTeamCity)).To(Succeed())
@@ -61,9 +60,7 @@ var _ = Describe("TeamCity controller", func() {
 				Expect(producedStatefulSet.Spec.Replicas).To(Equal(&TeamCityReplicas))
 			})
 		})
-
 	})
-
 })
 
 func statefulSet(ctx context.Context, teamcity *v1alpha1.TeamCity) *v1.StatefulSet {
