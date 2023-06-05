@@ -16,15 +16,61 @@ These instructions will get you a copy of the project up and running on your loc
 
 ## Prerequisites
 
-What things you need to install the software and how to install them.
+```
+go version go1.20.4
+```
+
+## Project layout
 
 ```
-Examples
+├── api
+│   └── v1alpha1 #structs that represent crds. run make generate to generate yaml crds into config/crd/bases folders
+├── bin 
+│   └── k8s
+│       └── 1.26.0-darwin-arm64 #results of make build
+├── cmd #contains main.go. operator's entrypoint 
+├── config #contains yaml resources for the oeprator to function
+│   ├── crd
+│   │   ├── bases
+│   │   └── patches
+│   ├── default
+│   ├── manager
+│   ├── manifests
+│   ├── prometheus #prometheus resources. normally should not be touched
+│   ├── rbac #required rbac resources
+│   ├── samples #sample yaml resource we can use for testing
+│   └── scorecard #olm. normally should not be touched
+│       ├── bases
+│       └── patches
+├── hack #contains boilerplate. normally should not be touched
+└── internal #operator's internals
+    ├── controller #contains reconciler loop
+    ├── metadata #contains functions for building labels and annotations
+    └── resource #contains builders for each resource 
+
+25 directories
+
+```
+## Run
+
+```shell
+make run
+```
+
+## Debug
+Use provided 
+
+## Test
+
+```shell
+make test #finds all test files and runs ginkgo tests
 ```
 
 ## Deployment
 
-Add additional notes about how to deploy this on a production system.
+```shell
+make deploy #installs controller to the selected kube context
+```
 
 ## Resources
 

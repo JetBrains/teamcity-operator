@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="go build main.go" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+  <configuration default="false" name="Run controller" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="teamcity-operator" />
     <working_directory value="$PROJECT_DIR$" />
     <parameters value="--zap-log-level=debug" />
