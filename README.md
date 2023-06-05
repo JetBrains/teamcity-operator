@@ -18,6 +18,14 @@ These instructions will get you a copy of the project up and running on your loc
 
 ```
 go version go1.20.4
+``` 
+```
+minikube version: v1.30.1
+```
+To run locally/debug(configure *minikube* as your current context):
+```
+kubectl config current-context
+minikube
 ```
 
 ## Project layout
@@ -58,7 +66,9 @@ make run
 ```
 
 ## Debug
-Use run configuration `Run controller` in Run or Debug mode
+Use run configuration `Run controller` in Run or Debug mode.
+
+***This run configuration assumes minikube is running and context with name `minikube` exists.***
 
 ## Test
 
