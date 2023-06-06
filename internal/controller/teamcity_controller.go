@@ -115,5 +115,6 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
+
 	return nil
 }
