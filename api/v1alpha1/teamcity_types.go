@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,8 +30,14 @@ type TeamCitySpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of TeamCity. Edit teamcity_types.go to remove/update
-	Image    string `json:"image"`
-	Replicas *int32 `json:"replicas"`
+	Image                  string                        `json:"image"`
+	Replicas               *int32                        `json:"replicas"`
+	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+}
+
+type CustomPersistentVolumeClaim struct {
+	Name string                       `json:"name"`
+	Spec v1.PersistentVolumeClaimSpec `json:"spec"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity

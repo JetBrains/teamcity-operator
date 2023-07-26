@@ -13,4 +13,19 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: nginx
-  replicas: 0
+  replicas: 1
+  persistentVolumeClaims:
+    - name: test-pvc-1
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - name: test-pvc-2
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
