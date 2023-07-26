@@ -25,7 +25,10 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-	pvcList, _ := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+	if err != nil {
+		return nil, err
+	}
 	return &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      builder.Instance.Name,
