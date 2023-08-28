@@ -120,6 +120,7 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&jetbrainscomv1alpha1.TeamCity{}).
 		Owns(&v1.StatefulSet{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
 
