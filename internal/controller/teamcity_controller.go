@@ -24,11 +24,13 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 )
@@ -92,14 +94,21 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		operationResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
-			return builder.Update(resource)
+		var operationResult controllerutil.OperationResult
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			log.V(1).Info(fmt.Sprintf("Attempting to update object of type %s", resource.GetObjectKind().GroupVersionKind().Kind))
+			var apiError error
+			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
+				return builder.Update(resource)
+			})
+			return apiError
 		})
+
 		if err != nil {
 			log.V(1).Error(err, "Failed to update resource")
 			return ctrl.Result{}, err
 		}
-		log.V(1).Info(fmt.Sprintf("Reconcilation result for TeamCity object is %s", operationResult))
+		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", resource.GetObjectKind().GroupVersionKind().Kind, operationResult))
 
 	}
 	return ctrl.Result{}, nil
