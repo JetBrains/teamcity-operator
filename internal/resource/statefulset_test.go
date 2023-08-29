@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"fmt"
 	v1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,7 +45,16 @@ var _ = Describe("StatefulSet", func() {
 		pvc = v1alpha1.CustomPersistentVolumeClaim{
 			Name: pvcName,
 			Spec: pvcSpec,
+			VolumeMount: corev1.VolumeMount{
+				Name:      "default-storage",
+				MountPath: "/storage",
+			},
 		}
+		requests = corev1.ResourceList{
+			"cpu":    resource.MustParse("750m"),
+			"memory": resource.MustParse("1000Mi"),
+		}
+		xmxPercentage = int64(95)
 	)
 	Describe("Build", func() {
 		BeforeEach(func() {
@@ -57,6 +67,8 @@ var _ = Describe("StatefulSet", func() {
 					Image:                  TeamCityImage,
 					Replicas:               &TeamCityReplicas,
 					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					Requests:               requests,
+					XmxPercentage:          xmxPercentage,
 				},
 			}
 			scheme = runtime.NewScheme()
@@ -111,6 +123,55 @@ var _ = Describe("StatefulSet", func() {
 			actual := statefulSet.Spec.VolumeClaimTemplates
 			Expect(actual).To(Equal(expected))
 		})
+		It("sets required resources requests for container", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			expected := corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					"cpu":    builder.Instance.Spec.Requests["cpu"],
+					"memory": builder.Instance.Spec.Requests["memory"],
+				},
+				Limits: nil,
+			}
+			actual := statefulSet.Spec.Template.Spec.Containers[0].Resources
+			Expect(actual).To(Equal(expected))
+		})
+		It("sets prestop command for container", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			expected := []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"}
+			actual := statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command
+			Expect(actual).To(Equal(expected))
+		})
+		It("calculates and provides env vars correctly", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
+			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
+
+			memOpts := corev1.EnvVar{
+				Name:  "TEAMCITY_SERVER_MEM_OPTS",
+				Value: fmt.Sprintf("%s%s", "-Xmx", xmxValue),
+			}
+
+			serverOpts := corev1.EnvVar{
+				Name: "TEAMCITY_SERVER_OPTS",
+				Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
+					fmt.Sprintf("-Dteamcity_logs=%s%s", datadirPath, "/logs") +
+					fmt.Sprintf("-XX:HeapDumpPath=%s%s%s",
+						datadirPath, "/memoryDumps/", TeamCityName) +
+					fmt.Sprintf("-Dteamcity.server.nodeId=%s", TeamCityName) +
+					fmt.Sprintf("-Dteamcity.node.data.path=%s", datadirPath),
+			}
+			expected := append([]corev1.EnvVar{}, memOpts)
+			expected = append(expected, serverOpts)
+			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
+			Expect(actual).To(Equal(expected))
+		})
+
 	})
 
 	Describe("Update", func() {
@@ -122,8 +183,10 @@ var _ = Describe("StatefulSet", func() {
 					Namespace: TeamCityNamespace,
 				},
 				Spec: v1alpha1.TeamCitySpec{
-					Image:    TeamCityImage,
-					Replicas: &TeamCityReplicas,
+					Image:                  TeamCityImage,
+					Replicas:               &TeamCityReplicas,
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					Requests:               requests,
 				},
 			}
 			scheme = runtime.NewScheme()

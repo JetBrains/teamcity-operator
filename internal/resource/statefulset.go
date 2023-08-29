@@ -6,6 +6,7 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +39,13 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 			Selector: &metav1.LabelSelector{
 				MatchLabels: metadata.LabelSelector(builder.Instance.Name),
 			},
+
 			VolumeClaimTemplates: pvcList,
+			Template: v12.PodTemplateSpec{
+				Spec: v12.PodSpec{
+					Containers: []v12.Container{containerSpecBuilder(builder.Instance)},
+				},
+			},
 		},
 	}, nil
 }
@@ -50,10 +57,12 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	statefulSet.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 
 	statefulSet.Spec.Template.Labels = metadata.Label(builder.Instance.Name)
-	statefulSet.Spec.Template.Spec.Containers = []v12.Container{}
-	statefulSet.Spec.Template.Spec.Containers = append(statefulSet.Spec.Template.Spec.Containers, v12.Container{})
-	statefulSet.Spec.Template.Spec.Containers[0].Image = builder.Instance.Spec.Image
-	statefulSet.Spec.Template.Spec.Containers[0].Name = "teamcity"
+	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
+	if statefulSet.Spec.Template.Spec.Containers == nil {
+		statefulSet.Spec.Template.Spec.Containers = []v12.Container{containerSpecBuilder(builder.Instance)}
+	} else {
+		statefulSet.Spec.Template.Spec.Containers[0] = containerSpecBuilder(builder.Instance)
+	}
 
 	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)
@@ -78,4 +87,96 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 		pvcList = append(pvcList, pvc)
 	}
 	return pvcList, nil
+}
+
+func containerSpecBuilder(instance *v1alpha1.TeamCity) v12.Container {
+	var container = v12.Container{
+		Name:  instance.Name,
+		Image: instance.Spec.Image,
+	}
+
+	container.ImagePullPolicy = v12.PullIfNotPresent
+
+	container.Ports = append([]v12.ContainerPort{}, instance.Spec.TeamCityServerPort)
+	container.Lifecycle = lifecycleOptionsBuilder()
+
+	container.LivenessProbe = &instance.Spec.LivenessProbeSettings
+	container.ReadinessProbe = &instance.Spec.ReadinessProbeSettings
+	container.StartupProbe = &instance.Spec.StartupProbeSettings
+	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
+	container.ReadinessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
+	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
+
+	container.VolumeMounts = volumeMountsBuilder(instance)
+
+	container.Resources.Limits = instance.Spec.Limits
+	container.Resources.Requests = instance.Spec.Requests
+
+	var defaultValues = map[string]any{
+		"nodeId":  instance.Name,
+		"dataDir": container.VolumeMounts[0].MountPath,
+		"Xmx":     xmxValueCalculator(instance.Spec.XmxPercentage, container.Resources.Requests.Memory().Value()),
+	}
+
+	var envVarDefaults = map[string]string{
+		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", defaultValues["Xmx"]),
+		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
+			fmt.Sprintf("-Dteamcity_logs=%s%s", defaultValues["dataDir"], "/logs") +
+			fmt.Sprintf("-XX:HeapDumpPath=%s%s%s",
+				defaultValues["dataDir"], "/memoryDumps/", defaultValues["nodeId"]) +
+			fmt.Sprintf("-Dteamcity.server.nodeId=%s", defaultValues["nodeId"]) +
+			fmt.Sprintf("-Dteamcity.node.data.path=%s", defaultValues["dataDir"]),
+	}
+	container.Env = environmentVariablesBuilder(instance, envVarDefaults)
+
+	return container
+}
+
+func xmxValueCalculator(percentage int64, requestedMemoryValue int64) (xmxValue *resource.Quantity) {
+	ratio := float64(percentage) / 100
+	xmxValue = resource.NewQuantity(int64(ratio*float64(requestedMemoryValue)), resource.DecimalSI)
+	return
+}
+
+func lifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
+	lifecycle = &v12.Lifecycle{
+		PostStart: nil,
+		PreStop: &v12.LifecycleHandler{
+			Exec: &v12.ExecAction{
+				Command: []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"},
+			},
+			HTTPGet: nil,
+		},
+	}
+	return
+}
+
+func environmentVariablesBuilder(instance *v1alpha1.TeamCity, envVarDefaults map[string]string) (envVars []v12.EnvVar) {
+	// merge with defaults
+	envVars = []v12.EnvVar{}
+
+	mergedMaps := make(map[string]string)
+	for k, v := range envVarDefaults {
+		mergedMaps[k] = v
+	}
+	for k, v := range instance.Spec.Env {
+		mergedMaps[k] = v
+	}
+
+	for key, value := range mergedMaps {
+		var envVar = v12.EnvVar{
+			Name:      key,
+			Value:     value,
+			ValueFrom: nil,
+		}
+		envVars = append(envVars, envVar)
+	}
+	return
+}
+
+func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.VolumeMount) {
+	for _, claim := range instance.Spec.PersistentVolumeClaims {
+		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: claim.VolumeMount.Name, MountPath: claim.VolumeMount.MountPath})
+	}
+	return
 }

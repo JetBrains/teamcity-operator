@@ -6,7 +6,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -19,6 +21,31 @@ var _ = Describe("TeamCity controller", func() {
 	)
 	var TeamCityReplicas = int32(0)
 	var teamcity *v1alpha1.TeamCity
+	var (
+		pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
+		pvcStorageClassName = "standard"
+		pvcVolumeMode       = corev1.PersistentVolumeFilesystem
+		pvcResources        = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse("1Gi"),
+			},
+		}
+		pvcName = "test-pvc"
+		pvcSpec = corev1.PersistentVolumeClaimSpec{
+			AccessModes:      pvcAccessMode,
+			StorageClassName: &pvcStorageClassName,
+			VolumeMode:       &pvcVolumeMode,
+			Resources:        pvcResources,
+		}
+		pvc = v1alpha1.CustomPersistentVolumeClaim{
+			Name: pvcName,
+			Spec: pvcSpec,
+		}
+		requests = corev1.ResourceList{
+			"cpu":    resource.MustParse("1"),
+			"memory": resource.MustParse("1000"),
+		}
+	)
 
 	Context("TeamCity controller test", func() {
 		BeforeEach(func() {
@@ -32,8 +59,10 @@ var _ = Describe("TeamCity controller", func() {
 					Namespace: TeamCityNamespace,
 				},
 				Spec: v1alpha1.TeamCitySpec{
-					Image:    TeamCityImage,
-					Replicas: &TeamCityReplicas,
+					Image:                  TeamCityImage,
+					Replicas:               &TeamCityReplicas,
+					Requests:               requests,
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
 				},
 			}
 			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())

@@ -32,12 +32,37 @@ type TeamCitySpec struct {
 	// Foo is an example field of TeamCity. Edit teamcity_types.go to remove/update
 	Image                  string                        `json:"image"`
 	Replicas               *int32                        `json:"replicas"`
-	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+	Requests               v1.ResourceList               `json:"requests"` // mandatory, since we rely on it with Xmx setup
+	Env                    map[string]string             `json:"env,omitempty"`
+	Limits                 v1.ResourceList               `json:"limits,omitempty"`
+	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims"` //mandatory, we need at least one volume for data persistence
+
+	// +kubebuilder:default:=95
+	XmxPercentage int64 `json:"xmxPercentage"`
+
+	// +kubebuilder:default:={runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+	PodSecurityContext v1.PodSecurityContext `json:"podSecurityContext"`
+
+	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
+	TeamCityServerPort v1.ContainerPort `json:"teamCityServerPort,omitempty"`
+
+	// +kubebuilder:default:={failureThreshold: 3, successThreshold: 1, periodSeconds: 20, initialDelaySeconds: 60, timeoutSeconds: 1}
+	LivenessProbeSettings v1.Probe `json:"livenessProbeSettings,omitempty"`
+	// +kubebuilder:default:={failureThreshold: 3, successThreshold: 1, periodSeconds: 10, initialDelaySeconds: 60, timeoutSeconds: 1}
+	ReadinessProbeSettings v1.Probe `json:"readinessProbeSettings,omitempty"`
+	// +kubebuilder:default:={failureThreshold: 15, successThreshold: 1, periodSeconds: 20, initialDelaySeconds: 60, timeoutSeconds: 1}
+	StartupProbeSettings v1.Probe `json:"startupProbeSettings,omitempty"`
+
+	// +kubebuilder:default:={path: "/healthCheck/ready", scheme: HTTP, port: 8111}
+	ReadinessEndpoint v1.HTTPGetAction `json:"readinessEndpoint,omitempty"`
+	// +kubebuilder:default:={path: /healthCheck/healthy, scheme: HTTP, port: 8111}
+	HealthEndpoint v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
 }
 
 type CustomPersistentVolumeClaim struct {
-	Name string                       `json:"name"`
-	Spec v1.PersistentVolumeClaimSpec `json:"spec"`
+	Name        string                       `json:"name"`
+	VolumeMount v1.VolumeMount               `json:"volumeMount"`
+	Spec        v1.PersistentVolumeClaimSpec `json:"spec"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity

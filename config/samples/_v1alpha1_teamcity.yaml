@@ -12,20 +12,21 @@ metadata:
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
 spec:
-  image: nginx
+  image: jetbrains/teamcity-server
   replicas: 1
+  env:
+    AWS_DEFAULT_REGION: "eu-west-1"
+  requests:
+    cpu: "1000m"
+    memory: "2500Mi"
   persistentVolumeClaims:
-    - name: test-pvc-1
+    - name: teamcity-node-volume1
+      volumeMount:
+        name: teamcity-node-volume
+        mountPath: /storage
       spec:
         accessModes:
           - ReadWriteOnce
         resources:
           requests:
             storage: 1Gi
-    - name: test-pvc-2
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 2Gi
