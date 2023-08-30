@@ -133,7 +133,10 @@ func customEventFilter() predicate.Predicate {
 			return true
 		},
 		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-			return !deleteEvent.DeleteStateUnknown
+			return true
+		},
+		GenericFunc: func(genericEvent event.GenericEvent) bool {
+			return true
 		},
 	}
 }
