@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -109,7 +110,6 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", resource.GetObjectKind().GroupVersionKind().Kind, operationResult))
-
 	}
 	return ctrl.Result{}, nil
 }
@@ -120,8 +120,22 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&jetbrainscomv1alpha1.TeamCity{}).
 		Owns(&v1.StatefulSet{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{})).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, customEventFilter())).
 		Complete(r)
+}
+
+func customEventFilter() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(createEvent event.CreateEvent) bool {
+			return true
+		},
+		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
+			return true
+		},
+		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+			return !deleteEvent.DeleteStateUnknown
+		},
+	}
 }
 
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
