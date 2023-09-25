@@ -13,13 +13,13 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
+  databaseSecretName: database-properties
   replicas: 1
   env:
     AWS_DEFAULT_REGION: "eu-west-1"
   requests:
     cpu: "1000m"
     memory: "2500Mi"
-  databaseSecretName: database-properties
   persistentVolumeClaims:
     - name: teamcity-node-volume1
       volumeMount:

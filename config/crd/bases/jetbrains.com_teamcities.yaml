@@ -1083,7 +1083,6 @@ spec:
                 format: int64
                 type: integer
             required:
-            - databaseSecretName
             - image
             - persistentVolumeClaims
             - podSecurityContext
