@@ -56,7 +56,8 @@ type TeamCitySpec struct {
 	// +kubebuilder:default:={path: "/healthCheck/ready", scheme: HTTP, port: 8111}
 	ReadinessEndpoint v1.HTTPGetAction `json:"readinessEndpoint,omitempty"`
 	// +kubebuilder:default:={path: /healthCheck/healthy, scheme: HTTP, port: 8111}
-	HealthEndpoint v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
+	HealthEndpoint     v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
+	DatabaseSecretName string           `json:"databaseSecretName"`
 }
 
 type CustomPersistentVolumeClaim struct {

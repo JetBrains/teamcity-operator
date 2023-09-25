@@ -19,10 +19,11 @@ spec:
   requests:
     cpu: "1000m"
     memory: "2500Mi"
+  databaseSecretName: database-properties
   persistentVolumeClaims:
     - name: teamcity-node-volume1
       volumeMount:
-        name: teamcity-node-volume
+        name: teamcity-node-volume1
         mountPath: /storage
       spec:
         accessModes:
