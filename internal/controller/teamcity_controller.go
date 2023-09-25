@@ -143,6 +143,5 @@ func customEventFilter() predicate.Predicate {
 
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
-
 	return nil
 }

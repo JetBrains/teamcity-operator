@@ -43,6 +43,7 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 			VolumeClaimTemplates: pvcList,
 			Template: v12.PodTemplateSpec{
 				Spec: v12.PodSpec{
+					Volumes:    []v12.Volume{databaseSecretVolumeBuilder(builder.Instance)},
 					Containers: []v12.Container{containerSpecBuilder(builder.Instance)},
 				},
 			},
@@ -107,16 +108,21 @@ func containerSpecBuilder(instance *v1alpha1.TeamCity) v12.Container {
 	container.ReadinessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
 	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
 
-	container.VolumeMounts = volumeMountsBuilder(instance)
-
 	container.Resources.Limits = instance.Spec.Limits
 	container.Resources.Requests = instance.Spec.Requests
 
+	volumeMounts := volumeMountsBuilder(instance)
+
 	var defaultValues = map[string]any{
 		"nodeId":  instance.Name,
-		"dataDir": container.VolumeMounts[0].MountPath,
+		"dataDir": volumeMounts[0].MountPath,
 		"Xmx":     xmxValueCalculator(instance.Spec.XmxPercentage, container.Resources.Requests.Memory().Value()),
 	}
+
+	secretVolumeMounts := secretMountsBuilder(instance, defaultValues["dataDir"])
+	volumeMounts = append(volumeMounts, secretVolumeMounts...)
+
+	container.VolumeMounts = volumeMounts
 
 	var envVarDefaults = map[string]string{
 		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", defaultValues["Xmx"]),
@@ -177,6 +183,26 @@ func environmentVariablesBuilder(instance *v1alpha1.TeamCity, envVarDefaults map
 func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.VolumeMount) {
 	for _, claim := range instance.Spec.PersistentVolumeClaims {
 		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: claim.VolumeMount.Name, MountPath: claim.VolumeMount.MountPath})
+	}
+	return
+}
+func secretMountsBuilder(instance *v1alpha1.TeamCity, dataDirPath any) (volumeMounts []v12.VolumeMount) {
+	if instance.Spec.DatabaseSecretName != "" {
+		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/%s", dataDirPath, DATABASE_PROPERTIES_FILE_NAME)})
+	}
+	return
+}
+
+func databaseSecretVolumeBuilder(instance *v1alpha1.TeamCity) (volume v12.Volume) {
+	if instance.Spec.DatabaseSecretName != "" {
+		volume = v12.Volume{
+			Name: DATABASE_PROPERTIES_VOLUME_NAME,
+			VolumeSource: v12.VolumeSource{
+				Secret: &v12.SecretVolumeSource{
+					SecretName: instance.Spec.DatabaseSecretName,
+				},
+			},
+		}
 	}
 	return
 }
