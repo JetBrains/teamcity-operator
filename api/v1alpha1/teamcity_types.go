@@ -40,7 +40,7 @@ type TeamCitySpec struct {
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage"`
 
-	// +kubebuilder:default:={runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+	// +kubebuilder:default:={runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
 	PodSecurityContext v1.PodSecurityContext `json:"podSecurityContext"`
 
 	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
