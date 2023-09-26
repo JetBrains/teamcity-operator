@@ -215,7 +215,7 @@ func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.Volume
 }
 func secretMountsBuilder(instance *v1alpha1.TeamCity, dataDirPath any) (volumeMounts []v12.VolumeMount) {
 	if instance.Spec.DatabaseSecretName != "" {
-		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config", dataDirPath)})
+		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/database.properties", dataDirPath), SubPath: "database.properties"})
 	}
 	return
 }
