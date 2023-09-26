@@ -1,3 +1,50 @@
+#do not forget to create DB in mysql using the following commands in mysql pod
+# mysql -u root -p (input password "password")
+# > CREATE DATABASE teamcity;
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - image: mysql:5.6
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          ports:
+            - containerPort: 3306
+              name: mysql
+---
+apiVersion: v1
+data:
+  database.properties: Y29ubmVjdGlvblVybD1qZGJjOm15c3FsOi8vbXlzcWwuZGVmYXVsdDozMzA2L3RlYW1jaXR5CmNvbm5lY3Rpb25Qcm9wZXJ0aWVzLnVzZXI9cm9vdApjb25uZWN0aW9uUHJvcGVydGllcy5wYXNzd29yZD1wYXNzd29yZApjb25uZWN0aW9uUHJvcGVydGllcy5zb2NrZXRUaW1lb3V0PTkwMDAwMAo=
+kind: Secret
+metadata:
+  creationTimestamp: null
+  name: database-properties
+---
 apiVersion: jetbrains.com/v1alpha1
 kind: TeamCity
 metadata:
