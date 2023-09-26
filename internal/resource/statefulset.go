@@ -13,12 +13,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const (
+	DATABASE_PROPERTIES_VOLUME_NAME = "database-properties"
+	DIR_SETUP_CONTAINER_NAME        = "dir-setup"
+	DIR_SETUP_CONTAINER_IMAGE       = "alpine:latest"
+)
+
+type TeamCityComputedValues struct {
+	NodeID       string
+	DataDirPath  string
+	VolumeMounts []v12.VolumeMount
+}
+
 type StatefulSetBuilder struct {
 	*TeamCityResourceBuilder
+	data TeamCityComputedValues
 }
 
 func (builder *TeamCityResourceBuilder) StatefulSet() *StatefulSetBuilder {
-	return &StatefulSetBuilder{builder}
+	return &StatefulSetBuilder{builder, TeamCityComputedValues{
+		NodeID:       "",
+		DataDirPath:  "",
+		VolumeMounts: nil,
+	}}
 }
 
 func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
@@ -31,14 +48,6 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 		return nil, err
 	}
 
-	//rework creation of shared resources by separating computed values into a separate struct inside Builder struct. Reuse them accordingly
-	volumeMounts := volumeMountsBuilder(builder.Instance)
-
-	var defaultValues = map[string]any{
-		"nodeId":  builder.Instance.Name,
-		"dataDir": volumeMounts[0].MountPath,
-	}
-
 	var volumes []v12.Volume
 
 	secretVolume := databaseSecretVolumeBuilder(builder.Instance)
@@ -46,12 +55,23 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 		volumes = append(volumes, secretVolume)
 	}
 
+	volumeMounts := volumeMountsBuilder(builder.Instance)
+
+	builder.data = TeamCityComputedValues{
+		NodeID:       builder.Instance.Name,
+		DataDirPath:  volumeMounts[0].MountPath,
+		VolumeMounts: volumeMounts,
+	}
+
 	var initContainers []v12.Container
 
-	dirSetupContainer := initContainerSpecBuilder(volumeMounts, defaultValues)
+	dirSetupContainer := initContainerSpecBuilder(builder.data.VolumeMounts, builder.data.DataDirPath)
 	if dirSetupContainer.Name != "" {
 		initContainers = append(initContainers, dirSetupContainer)
+
 	}
+	secretVolumeMounts := secretMountsBuilder(builder.Instance, builder.data.DataDirPath)
+	builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts...)
 
 	return &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -84,9 +104,9 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	statefulSet.Spec.Template.Labels = metadata.Label(builder.Instance.Name)
 	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
 	if statefulSet.Spec.Template.Spec.Containers == nil {
-		statefulSet.Spec.Template.Spec.Containers = []v12.Container{containerSpecBuilder(builder.Instance)}
+		statefulSet.Spec.Template.Spec.Containers = []v12.Container{containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)}
 	} else {
-		statefulSet.Spec.Template.Spec.Containers[0] = containerSpecBuilder(builder.Instance)
+		statefulSet.Spec.Template.Spec.Containers[0] = containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)
 	}
 
 	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
@@ -114,18 +134,21 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 	return pvcList, nil
 }
 
-func initContainerSpecBuilder(volumeMounts []v12.VolumeMount, defaultValues map[string]any) (container v12.Container) {
+func initContainerSpecBuilder(volumeMounts []v12.VolumeMount, dataDirPath string) (container v12.Container) {
 	container = v12.Container{
 		Name:    DIR_SETUP_CONTAINER_NAME,
 		Image:   DIR_SETUP_CONTAINER_IMAGE,
-		Command: []string{"echo hello"},
+		Command: []string{"/bin/sh", "-c", fmt.Sprintf("[ -d %s/config ] || mkdir %s/config && %s", dataDirPath, dataDirPath, fmt.Sprintf("chown -vR 1000:1000 %s", dataDirPath))},
 	}
 	container.VolumeMounts = volumeMounts
-
+	container.SecurityContext = &v12.SecurityContext{
+		RunAsUser:  new(int64),
+		RunAsGroup: new(int64),
+	}
 	return
 }
 
-func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.VolumeMount, defaultValues map[string]any) v12.Container {
+func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.VolumeMount, dataDirPath string, nodeId string) v12.Container {
 	var container = v12.Container{
 		Name:  instance.Name,
 		Image: instance.Spec.Image,
@@ -146,19 +169,16 @@ func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.Volume
 	container.Resources.Limits = instance.Spec.Limits
 	container.Resources.Requests = instance.Spec.Requests
 
-	secretVolumeMounts := secretMountsBuilder(instance, defaultValues["dataDir"])
-	volumeMounts = append(volumeMounts, secretVolumeMounts...)
-
 	container.VolumeMounts = volumeMounts
 
 	var envVarDefaults = map[string]string{
 		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(instance.Spec.XmxPercentage, container.Resources.Requests.Memory().Value())),
-		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", defaultValues["dataDir"]),
-		"TEAMCITY_LOGS_PATH":       fmt.Sprintf("%s%s", defaultValues["dataDir"], "/logs"),
+		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", dataDirPath),
+		"TEAMCITY_LOGS_PATH":       fmt.Sprintf("%s%s", dataDirPath, "/logs"),
 		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
-			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", defaultValues["dataDir"], "/memoryDumps/", defaultValues["nodeId"]) +
-			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", defaultValues["nodeId"]) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", defaultValues["nodeId"]),
+			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", nodeId) +
+			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", nodeId) +
+			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", nodeId),
 	}
 	container.Env = environmentVariablesBuilder(instance, envVarDefaults)
 
