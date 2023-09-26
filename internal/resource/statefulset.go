@@ -88,7 +88,7 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 				Spec: v12.PodSpec{
 					Volumes:        volumes,
 					InitContainers: initContainers,
-					Containers:     []v12.Container{containerSpecBuilder(builder.Instance, volumeMounts, defaultValues)},
+					Containers:     []v12.Container{containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)},
 				},
 			},
 		},
