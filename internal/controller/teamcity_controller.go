@@ -84,6 +84,13 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
+	//resourceValidators := validator.TeamCityDependencyValidator{}
+	//validators := resourceValidators.Validators()
+	//
+	//for _, validator := range validators {
+	//	dependantResourceValid := validator.Validate()
+	//}
+
 	resourceBuilder := resource.TeamCityResourceBuilder{
 		Instance: &teamcity,
 		Scheme:   r.Scheme,

@@ -15,7 +15,6 @@ import (
 
 const (
 	DATABASE_PROPERTIES_VOLUME_NAME = "database-properties"
-	DATABASE_PROPERTIES_FILE_NAME   = "database.properties"
 	DIR_SETUP_CONTAINER_NAME        = "dir-setup"
 )
 
