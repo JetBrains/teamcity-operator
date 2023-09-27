@@ -17,7 +17,6 @@ const (
 	DATABASE_PROPERTIES_VOLUME_NAME = "database-properties"
 	DATABASE_PROPERTIES_FILE_NAME   = "database.properties"
 	DIR_SETUP_CONTAINER_NAME        = "dir-setup"
-	DIR_SETUP_CONTAINER_IMAGE       = "centos:7"
 )
 
 type TeamCityComputedValues struct {
@@ -61,7 +60,7 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 	if databaseSecretProvided {
 		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecretName)
 		volumes = append(volumes, secretVolume)
-		dirSetupContainer := initChangeMountOwnershipContainer(builder.data.VolumeMounts, builder.data.DataDirPath)
+		dirSetupContainer := initChangeMountOwnershipContainer(builder.data.VolumeMounts, builder.Instance.Spec.DatabaseSecretName, builder.data.DataDirPath)
 		initContainers = append(initContainers, dirSetupContainer)
 		secretVolumeMounts := secretMountsBuilder(builder.data.DataDirPath)
 		builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts)
@@ -133,10 +132,10 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 	return pvcList, nil
 }
 
-func initChangeMountOwnershipContainer(volumeMounts []v12.VolumeMount, dataDirPath string) (container v12.Container) {
+func initChangeMountOwnershipContainer(volumeMounts []v12.VolumeMount, dirSetupContainerImage string, dataDirPath string) (container v12.Container) {
 	container = v12.Container{
 		Name:    DIR_SETUP_CONTAINER_NAME,
-		Image:   DIR_SETUP_CONTAINER_IMAGE,
+		Image:   dirSetupContainerImage,
 		Command: []string{"/bin/sh", "-c", fmt.Sprintf("[ -d %s/config ] || mkdir %s/config && %s", dataDirPath, dataDirPath, fmt.Sprintf("chown -vR 1000:1000 %s", dataDirPath))},
 	}
 	container.VolumeMounts = volumeMounts
