@@ -15,6 +15,7 @@ import (
 
 const (
 	DATABASE_PROPERTIES_VOLUME_NAME = "database-properties"
+	DATABASE_PROPERTIES_FILE_NAME   = "database.properties"
 	DIR_SETUP_CONTAINER_NAME        = "dir-setup"
 	DIR_SETUP_CONTAINER_IMAGE       = "centos:7"
 )
@@ -232,7 +233,7 @@ func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.Volume
 	return
 }
 func secretMountsBuilder(dataDirPath any) v12.VolumeMount {
-	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/database.properties", dataDirPath), SubPath: "database.properties"}
+	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/%s", dataDirPath, DATABASE_PROPERTIES_FILE_NAME), SubPath: DATABASE_PROPERTIES_FILE_NAME}
 }
 
 func databaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
