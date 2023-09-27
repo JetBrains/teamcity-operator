@@ -58,7 +58,7 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 	}
 
 	if databaseSecretProvided {
-		secretVolume := databaseSecretVolumeBuilder(builder.Instance)
+		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecretName)
 		volumes = append(volumes, secretVolume)
 		dirSetupContainer := initChangeMountOwnershipContainer(builder.data.VolumeMounts, builder.data.DataDirPath)
 		initContainers = append(initContainers, dirSetupContainer)
@@ -235,16 +235,13 @@ func secretMountsBuilder(dataDirPath any) v12.VolumeMount {
 	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/database.properties", dataDirPath), SubPath: "database.properties"}
 }
 
-func databaseSecretVolumeBuilder(instance *v1alpha1.TeamCity) (volume v12.Volume) {
-	if instance.Spec.DatabaseSecretName != "" {
-		volume = v12.Volume{
-			Name: DATABASE_PROPERTIES_VOLUME_NAME,
-			VolumeSource: v12.VolumeSource{
-				Secret: &v12.SecretVolumeSource{
-					SecretName: instance.Spec.DatabaseSecretName,
-				},
+func databaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
+	return v12.Volume{
+		Name: DATABASE_PROPERTIES_VOLUME_NAME,
+		VolumeSource: v12.VolumeSource{
+			Secret: &v12.SecretVolumeSource{
+				SecretName: databaseSecretName,
 			},
-		}
+		},
 	}
-	return
 }
