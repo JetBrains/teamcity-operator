@@ -44,8 +44,6 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 
-	databaseSecretProvided := builder.Instance.Spec.DatabaseSecretName != ""
-
 	var volumes []v12.Volume
 	var initContainers []v12.Container
 
@@ -56,6 +54,8 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 		DataDirPath:  volumeMounts[0].MountPath,
 		VolumeMounts: volumeMounts,
 	}
+
+	databaseSecretProvided := builder.Instance.Spec.DatabaseSecretName != ""
 
 	if databaseSecretProvided {
 		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecretName)
