@@ -16,7 +16,7 @@ import (
 const (
 	DATABASE_PROPERTIES_VOLUME_NAME = "database-properties"
 	DIR_SETUP_CONTAINER_NAME        = "dir-setup"
-	DIR_SETUP_CONTAINER_IMAGE       = "alpine:latest"
+	DIR_SETUP_CONTAINER_IMAGE       = "centos:7"
 )
 
 type TeamCityComputedValues struct {
@@ -43,17 +43,11 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
-	if err != nil {
-		return nil, err
-	}
+
+	databaseSecretProvided := builder.Instance.Spec.DatabaseSecretName != ""
 
 	var volumes []v12.Volume
-
-	secretVolume := databaseSecretVolumeBuilder(builder.Instance)
-	if secretVolume.Name != "" {
-		volumes = append(volumes, secretVolume)
-	}
+	var initContainers []v12.Container
 
 	volumeMounts := volumeMountsBuilder(builder.Instance)
 
@@ -63,15 +57,19 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 		VolumeMounts: volumeMounts,
 	}
 
-	var initContainers []v12.Container
-
-	dirSetupContainer := initContainerSpecBuilder(builder.data.VolumeMounts, builder.data.DataDirPath)
-	if dirSetupContainer.Name != "" {
+	if databaseSecretProvided {
+		secretVolume := databaseSecretVolumeBuilder(builder.Instance)
+		volumes = append(volumes, secretVolume)
+		dirSetupContainer := initChangeMountOwnershipContainer(builder.data.VolumeMounts, builder.data.DataDirPath)
 		initContainers = append(initContainers, dirSetupContainer)
-
+		secretVolumeMounts := secretMountsBuilder(builder.data.DataDirPath)
+		builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts)
 	}
-	secretVolumeMounts := secretMountsBuilder(builder.Instance, builder.data.DataDirPath)
-	builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts...)
+
+	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+	if err != nil {
+		return nil, err
+	}
 
 	return &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -134,7 +132,7 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 	return pvcList, nil
 }
 
-func initContainerSpecBuilder(volumeMounts []v12.VolumeMount, dataDirPath string) (container v12.Container) {
+func initChangeMountOwnershipContainer(volumeMounts []v12.VolumeMount, dataDirPath string) (container v12.Container) {
 	container = v12.Container{
 		Name:    DIR_SETUP_CONTAINER_NAME,
 		Image:   DIR_SETUP_CONTAINER_IMAGE,
@@ -233,11 +231,8 @@ func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.Volume
 	}
 	return
 }
-func secretMountsBuilder(instance *v1alpha1.TeamCity, dataDirPath any) (volumeMounts []v12.VolumeMount) {
-	if instance.Spec.DatabaseSecretName != "" {
-		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/database.properties", dataDirPath), SubPath: "database.properties"})
-	}
-	return
+func secretMountsBuilder(dataDirPath any) v12.VolumeMount {
+	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s/config/database.properties", dataDirPath), SubPath: "database.properties"}
 }
 
 func databaseSecretVolumeBuilder(instance *v1alpha1.TeamCity) (volume v12.Volume) {
