@@ -35,11 +35,22 @@ spec:
           spec:
             description: TeamCitySpec defines the desired state of TeamCity
             properties:
-              databaseSecretName:
-                type: string
-              dirSetupContainerImage:
-                default: alpine:latest
-                type: string
+              databaseSecret:
+                properties:
+                  path:
+                    default: /config/database.properties
+                    description: Path is relative to TEAMCITY_DATA_PATH env variable
+                      which is set by controller
+                    type: string
+                  secret:
+                    type: string
+                  setupContainerImage:
+                    default: alpine:latest
+                    type: string
+                  subPath:
+                    default: database.properties
+                    type: string
+                type: object
               env:
                 additionalProperties:
                   type: string

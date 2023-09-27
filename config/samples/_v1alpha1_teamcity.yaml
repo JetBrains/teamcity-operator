@@ -73,8 +73,11 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  databaseSecretName: database-properties
-  dirSetupContainerImage: centos:7
+  databaseSecret:
+    setupContainerImage: "centos:7"
+    secret: database-properties
+    path: "/config/database.properties"
+    subPath: "database.properties"
   replicas: 1
   env:
     AWS_DEFAULT_REGION: "eu-west-1"

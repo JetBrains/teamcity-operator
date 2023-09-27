@@ -56,10 +56,20 @@ type TeamCitySpec struct {
 	// +kubebuilder:default:={path: "/healthCheck/ready", scheme: HTTP, port: 8111}
 	ReadinessEndpoint v1.HTTPGetAction `json:"readinessEndpoint,omitempty"`
 	// +kubebuilder:default:={path: /healthCheck/healthy, scheme: HTTP, port: 8111}
-	HealthEndpoint     v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
-	DatabaseSecretName string           `json:"databaseSecretName,omitempty"`
+	HealthEndpoint v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
+	// +kubebuilder:default:={}
+	DatabaseSecret DatabaseSecret `json:"databaseSecret,omitempty"`
+}
+
+type DatabaseSecret struct {
+	Secret string `json:"secret,omitempty"`
 	// +kubebuilder:default:="alpine:latest"
-	DirSetupContainerImage string `json:"dirSetupContainerImage,omitempty"`
+	SetupContainerImage string `json:"setupContainerImage,omitempty"`
+	//Path is relative to TEAMCITY_DATA_PATH env variable which is set by controller
+	// +kubebuilder:default:="/config/database.properties"
+	Path string `json:"path,omitempty"`
+	// +kubebuilder:default:="database.properties"
+	SubPath string `json:"subPath,omitempty"`
 }
 
 type CustomPersistentVolumeClaim struct {
