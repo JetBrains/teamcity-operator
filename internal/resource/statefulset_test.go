@@ -152,6 +152,16 @@ var _ = Describe("StatefulSet", func() {
 			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
 			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
 
+			dataPath := corev1.EnvVar{
+				Name:  "TEAMCITY_DATA_PATH",
+				Value: datadirPath,
+			}
+
+			logsPath := corev1.EnvVar{
+				Name:  "TEAMCITY_LOGS_PATH",
+				Value: fmt.Sprintf("%s/%s", datadirPath, "logs"),
+			}
+
 			memOpts := corev1.EnvVar{
 				Name:  "TEAMCITY_SERVER_MEM_OPTS",
 				Value: fmt.Sprintf("%s%s", "-Xmx", xmxValue),
@@ -160,14 +170,9 @@ var _ = Describe("StatefulSet", func() {
 			serverOpts := corev1.EnvVar{
 				Name: "TEAMCITY_SERVER_OPTS",
 				Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
-					fmt.Sprintf("-Dteamcity_logs=%s%s", datadirPath, "/logs") +
-					fmt.Sprintf("-XX:HeapDumpPath=%s%s%s",
-						datadirPath, "/memoryDumps/", TeamCityName) +
-					fmt.Sprintf("-Dteamcity.server.nodeId=%s", TeamCityName) +
-					fmt.Sprintf("-Dteamcity.node.data.path=%s", datadirPath),
-			}
-			expected := append([]corev1.EnvVar{}, memOpts)
-			expected = append(expected, serverOpts)
+					fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", datadirPath, "/memoryDumps/", TeamCityName) +
+					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", TeamCityName) + fmt.Sprintf(" -Dteamcity.server.rootURL=%s", TeamCityName)}
+			expected := append([]corev1.EnvVar{}, memOpts, dataPath, logsPath, serverOpts)
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
 			Expect(actual).To(Equal(expected))
 		})
