@@ -129,6 +129,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", object.GetObjectKind().GroupVersionKind().Kind, operationResult))
 	}
+	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	return ctrl.Result{}, nil
 }
 
