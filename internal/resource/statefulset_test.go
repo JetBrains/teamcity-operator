@@ -54,7 +54,13 @@ var _ = Describe("StatefulSet", func() {
 			"cpu":    resource.MustParse("750m"),
 			"memory": resource.MustParse("1000Mi"),
 		}
-		xmxPercentage = int64(95)
+		xmxPercentage  = int64(95)
+		databaseSecret = v1alpha1.DatabaseSecret{
+			Secret:              "database-secret",
+			SetupContainerImage: "alpine",
+			Path:                "/configuration/database.properties",
+			SubPath:             "database.properties",
+		}
 	)
 	Describe("Build", func() {
 		BeforeEach(func() {
@@ -69,6 +75,7 @@ var _ = Describe("StatefulSet", func() {
 					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
 					Requests:               requests,
 					XmxPercentage:          xmxPercentage,
+					DatabaseSecret:         databaseSecret,
 				},
 			}
 			scheme = runtime.NewScheme()
