@@ -82,7 +82,8 @@ type CustomPersistentVolumeClaim struct {
 type TeamCityStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	State string `json:"state"`
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 //+kubebuilder:object:root=true

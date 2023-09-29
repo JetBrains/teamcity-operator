@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
+	"git.jetbrains.team/tch/teamcity-operator/internal/validator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,10 +63,12 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := log.FromContext(ctx)
 
 	var teamcity jetbrainscomv1alpha1.TeamCity
-	if err := r.Get(ctx, req.NamespacedName, &teamcity); err != nil {
-		log.V(1).Info("Could not get TeamCity object. Ignoring")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	var err error
+
+	if teamcity, err = GetTeamCityObjectE(r, ctx, req.NamespacedName); err != nil {
+		return ctrl.Result{}, err
 	}
+
 	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
 	if isMarkedForDeletion {
 		log.V(1).Info("TeamCity object is marked for deletion")
@@ -84,13 +87,6 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	//resourceValidators := validator.TeamCityDependencyValidator{}
-	//validators := resourceValidators.Validators()
-	//
-	//for _, validator := range validators {
-	//	dependantResourceValid := validator.Validate()
-	//}
-
 	resourceBuilder := resource.TeamCityResourceBuilder{
 		Instance: &teamcity,
 		Scheme:   r.Scheme,
@@ -98,25 +94,44 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	builders := resourceBuilder.ResourceBuilders()
 
 	for _, builder := range builders {
-		resource, err := builder.Build()
+		object, err := builder.Build()
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+
+		//validate resources required to creation of object
+		switch builder.(type) {
+
+		case *resource.StatefulSetBuilder:
+			databaseSecretName := teamcity.Spec.DatabaseSecret.Secret
+			databaseSecret, err := GetSecretE(r, teamcity.Spec.DatabaseSecret.Secret, req.Namespace)
+			if err != nil {
+				_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, fmt.Sprintf("Required database secret %s does not exist in namespace %s", databaseSecretName, req.Namespace))
+				return ctrl.Result{}, err
+			}
+			dbValidator := validator.DatabaseSecretValidator{Object: &databaseSecret}
+			err = dbValidator.ValidateObject()
+			if err != nil {
+				_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
+				return ctrl.Result{}, err
+			}
+		}
+
 		var operationResult controllerutil.OperationResult
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			log.V(1).Info(fmt.Sprintf("Attempting to update object of type %s", resource.GetObjectKind().GroupVersionKind().Kind))
+			log.V(1).Info(fmt.Sprintf("Attempting to update object of type %s", object.GetObjectKind().GroupVersionKind().Kind))
 			var apiError error
-			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
-				return builder.Update(resource)
+			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, object, func() error {
+				return builder.Update(object)
 			})
 			return apiError
 		})
 
 		if err != nil {
-			log.V(1).Error(err, "Failed to update resource")
+			log.V(1).Error(err, "Failed to update object")
 			return ctrl.Result{}, err
 		}
-		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", resource.GetObjectKind().GroupVersionKind().Kind, operationResult))
+		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", object.GetObjectKind().GroupVersionKind().Kind, operationResult))
 	}
 	return ctrl.Result{}, nil
 }
