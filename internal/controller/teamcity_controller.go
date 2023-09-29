@@ -99,7 +99,9 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 
-		//validate resources required to creation of object
+		// validate resources required to creation of object
+		// depending on type of object we want to perform different checks
+		// for example: for sts we need to make that database secret(if provided) is valid to run teamcity
 		switch builder.(type) {
 
 		case *resource.StatefulSetBuilder:
