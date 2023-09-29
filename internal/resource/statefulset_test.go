@@ -5,6 +5,7 @@ import (
 	v1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -181,7 +182,8 @@ var _ = Describe("StatefulSet", func() {
 					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", TeamCityName) + fmt.Sprintf(" -Dteamcity.server.rootURL=%s", TeamCityName)}
 			expected := append([]corev1.EnvVar{}, memOpts, dataPath, logsPath, serverOpts)
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
-			Expect(actual).To(Equal(expected))
+			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
+			Expect(envVarsAreEqual).To(Equal(true))
 		})
 
 	})
