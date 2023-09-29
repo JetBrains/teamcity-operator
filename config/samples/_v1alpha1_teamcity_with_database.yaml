@@ -1,0 +1,94 @@
+#file: noinspection YAMLSchemaValidation
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-initdb-config
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS teamcity;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      volumes:
+        - name: mysql-initdb
+          configMap:
+            name: mysql-initdb-config
+      containers:
+        - image: mysql:8
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-initdb
+              mountPath: /docker-entrypoint-initdb.d
+---
+#based on database.properties
+apiVersion: v1
+data:
+  database.properties: Y29ubmVjdGlvblVybD1qZGJjOm15c3FsOi8vbXlzcWwuZGVmYXVsdDozMzA2L3RlYW1jaXR5CmNvbm5lY3Rpb25Qcm9wZXJ0aWVzLnVzZXI9cm9vdApjb25uZWN0aW9uUHJvcGVydGllcy5wYXNzd29yZD1wYXNzd29yZApjb25uZWN0aW9uUHJvcGVydGllcy5zb2NrZXRUaW1lb3V0PTkwMDAwMAo=
+kind: Secret
+metadata:
+  name: database-properties
+---
+apiVersion: jetbrains.com/v1alpha1
+kind: TeamCity
+metadata:
+  labels:
+    app.kubernetes.io/name: teamcity
+    app.kubernetes.io/instance: teamcity-sample
+    app.kubernetes.io/part-of: teamcity-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: teamcity-operator
+  name: teamcity-sample
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  databaseSecret:
+    secret: database-properties
+  replicas: 1
+  env:
+    AWS_DEFAULT_REGION: "eu-west-1"
+  requests:
+    cpu: "1000m"
+    memory: "2500Mi"
+  persistentVolumeClaims:
+    - name: teamcity-node-volume1
+      volumeMount:
+        name: teamcity-node-volume1
+        mountPath: /storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
