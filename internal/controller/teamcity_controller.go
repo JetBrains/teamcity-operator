@@ -23,6 +23,7 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/internal/validator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
+	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -105,17 +106,10 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		switch builder.(type) {
 
 		case *resource.StatefulSetBuilder:
-			databaseSecretName := teamcity.Spec.DatabaseSecret.Secret
-			databaseSecret, err := GetSecretE(r, teamcity.Spec.DatabaseSecret.Secret, req.Namespace)
-			if err != nil {
-				_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, fmt.Sprintf("Required database secret %s does not exist in namespace %s", databaseSecretName, req.Namespace))
-				return ctrl.Result{}, err
-			}
-			dbValidator := validator.DatabaseSecretValidator{Object: &databaseSecret}
-			err = dbValidator.ValidateObject()
-			if err != nil {
-				_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
-				return ctrl.Result{}, err
+			if teamcity.Spec.DatabaseSecret.Secret != "" {
+				if err = r.validateDatabaseSecret(ctx, req, teamcity.Spec.DatabaseSecret.Secret); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
 
@@ -168,4 +162,18 @@ func customEventFilter() predicate.Predicate {
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
 	return nil
+}
+
+func (r *TeamcityReconciler) validateDatabaseSecret(ctx context.Context, req ctrl.Request, secretName string) (err error) {
+	var databaseSecret v12.Secret
+	if databaseSecret, err = GetSecretE(r, secretName, req.Namespace); err != nil {
+		_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
+		return err
+	}
+	dbValidator := validator.DatabaseSecretValidator{Object: &databaseSecret}
+	if err = dbValidator.ValidateObject(); err != nil {
+		_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
+		return err
+	}
+	return err
 }
