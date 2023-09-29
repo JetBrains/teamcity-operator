@@ -65,11 +65,6 @@ type DatabaseSecret struct {
 	Secret string `json:"secret,omitempty"`
 	// +kubebuilder:default:="alpine:latest"
 	SetupContainerImage string `json:"setupContainerImage,omitempty"`
-	//Path is relative to TEAMCITY_DATA_PATH env variable which is set by controller
-	// +kubebuilder:default:="/config/database.properties"
-	Path string `json:"path,omitempty"`
-	// +kubebuilder:default:="database.properties"
-	SubPath string `json:"subPath,omitempty"`
 }
 
 type CustomPersistentVolumeClaim struct {
