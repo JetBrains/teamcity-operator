@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	defaultscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
+	"strings"
 )
 
 var _ = Describe("StatefulSet", func() {
@@ -59,8 +60,6 @@ var _ = Describe("StatefulSet", func() {
 		databaseSecret = v1alpha1.DatabaseSecret{
 			Secret:              "database-secret",
 			SetupContainerImage: "alpine",
-			Path:                "/configuration/database.properties",
-			SubPath:             "database.properties",
 		}
 	)
 	Describe("Build", func() {
@@ -185,6 +184,44 @@ var _ = Describe("StatefulSet", func() {
 			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
 			Expect(envVarsAreEqual).To(Equal(true))
 		})
+		It("creates and configures init container for database secret correctly", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			initContainers := statefulSet.Spec.Template.Spec.InitContainers
+			Expect(len(initContainers)).To(Equal(1))
+
+			dirSetupContainer := initContainers[0]
+			Expect(dirSetupContainer.Name).To(Equal(DIR_SETUP_CONTAINER_NAME))
+			Expect(dirSetupContainer.Image).To(Equal(databaseSecret.SetupContainerImage))
+			Expect(len(dirSetupContainer.VolumeMounts)).To(Equal(1))
+
+			Expect(len(dirSetupContainer.Command)).To(Equal(3))
+		})
+		It("mounts database secret correctly", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			volumes := statefulSet.Spec.Template.Spec.Volumes
+			Expect(len(volumes)).To(Equal(1))
+
+			databaseSecretVolume := volumes[0]
+			Expect(databaseSecretVolume.Name).To(Equal(DATABASE_PROPERTIES_VOLUME_NAME))
+			Expect(databaseSecretVolume.Secret.SecretName).To(Equal(instance.Spec.DatabaseSecret.Secret))
+
+			volumeMounts := statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts
+			Expect(len(volumeMounts)).To(Equal(2))
+
+			databaseSecretVolumeMount := volumeMounts[1]
+			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
+			datadirPathClean := strings.Replace(datadirPath, "/", "", -1)
+
+			databaseSecretPathSplit := RemoveEmptyStrings(strings.Split(databaseSecretVolumeMount.MountPath, "/"))
+			Expect(databaseSecretPathSplit).To(Equal([]string{datadirPathClean, "config", TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}))
+
+		})
 
 	})
 
@@ -226,3 +263,13 @@ var _ = Describe("StatefulSet", func() {
 		})
 	})
 })
+
+func RemoveEmptyStrings(s []string) []string {
+	var r []string
+	for _, str := range s {
+		if str != "" {
+			r = append(r, str)
+		}
+	}
+	return r
+}
