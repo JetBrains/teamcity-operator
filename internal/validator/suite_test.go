@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestResource(t *testing.T) {
+func TestValidators(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Validator Suite")
 }
