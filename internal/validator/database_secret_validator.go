@@ -30,7 +30,7 @@ func (validator DatabaseSecretValidator) ValidateObject() error {
 	}
 	for _, line := range ByteArrayToLineStringArray(databasePropertiesContent) {
 		lineSplit := strings.Split(line, "=")
-		if len(lineSplit) < 1 {
+		if len(lineSplit) < 1 || lineSplit[1] == "" {
 			return fmt.Errorf("Value is not provided for key %s in database secret", lineSplit[0])
 		}
 		databasePropertyKey := lineSplit[0]
