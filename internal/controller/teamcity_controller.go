@@ -167,7 +167,7 @@ func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrai
 
 func (r *TeamcityReconciler) validateDatabaseSecret(ctx context.Context, req ctrl.Request, secretName string) (err error) {
 	var databaseSecret v12.Secret
-	if databaseSecret, err = GetSecretE(r, secretName, req.Namespace); err != nil {
+	if databaseSecret, err = GetSecretE(r, ctx, secretName, req.Namespace); err != nil {
 		_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
 		return err
 	}
