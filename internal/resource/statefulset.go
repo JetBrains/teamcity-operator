@@ -61,8 +61,6 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 	if databaseSecretProvided {
 		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
 		volumes = append(volumes, secretVolume)
-		dirSetupContainer := initChangeMountOwnershipContainer(builder.data.VolumeMounts, builder.Instance.Spec.DatabaseSecret.SetupContainerImage, builder.data.DataDirPath)
-		initContainers = append(initContainers, dirSetupContainer)
 		secretVolumeMounts := secretMountsBuilder(builder.data.DataDirPath)
 		builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts)
 	}
@@ -131,20 +129,6 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 		pvcList = append(pvcList, pvc)
 	}
 	return pvcList, nil
-}
-
-func initChangeMountOwnershipContainer(volumeMounts []v12.VolumeMount, dirSetupContainerImage string, dataDirPath string) (container v12.Container) {
-	container = v12.Container{
-		Name:    DIR_SETUP_CONTAINER_NAME,
-		Image:   dirSetupContainerImage,
-		Command: []string{"/bin/sh", "-c", fmt.Sprintf("[ -d %s/config ] || mkdir %s/config && %s", dataDirPath, dataDirPath, fmt.Sprintf("chown -vR 1000:1000 %s", dataDirPath))},
-	}
-	container.VolumeMounts = volumeMounts
-	container.SecurityContext = &v12.SecurityContext{
-		RunAsUser:  new(int64),
-		RunAsGroup: new(int64),
-	}
-	return
 }
 
 func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.VolumeMount, dataDirPath string, nodeId string) v12.Container {

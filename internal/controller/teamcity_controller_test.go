@@ -105,7 +105,8 @@ var _ = Describe("TeamCity controller", func() {
 			databaseSecret = v1alpha1.DatabaseSecret{
 				Secret: TeamCityDatabaseSecretName,
 			}
-			databaseProperties  *corev1.Secret
+			databaseProperties *corev1.Secret
+
 			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
 			pvcStorageClassName = "standard"
 			pvcVolumeMode       = corev1.PersistentVolumeFilesystem
@@ -114,18 +115,26 @@ var _ = Describe("TeamCity controller", func() {
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
 				},
 			}
-			pvcName = "test-pvc"
-			pvcSpec = corev1.PersistentVolumeClaimSpec{
+			dataDirPVCName = "test-data-dir-pvc"
+			pvcSpec        = corev1.PersistentVolumeClaimSpec{
 				AccessModes:      pvcAccessMode,
 				StorageClassName: &pvcStorageClassName,
 				VolumeMode:       &pvcVolumeMode,
 				Resources:        pvcResources,
 			}
-			pvc = v1alpha1.CustomPersistentVolumeClaim{
-				Name:        pvcName,
+			dataDirPVC = v1alpha1.CustomPersistentVolumeClaim{
+				Name:        dataDirPVCName,
 				Spec:        pvcSpec,
 				VolumeMount: corev1.VolumeMount{MountPath: "/storage"},
 			}
+
+			configDirPVCName = "test-config-dir-pvc"
+			configDirPVC     = v1alpha1.CustomPersistentVolumeClaim{
+				Name:        configDirPVCName,
+				VolumeMount: corev1.VolumeMount{MountPath: "/storage/config"},
+				Spec:        pvcSpec,
+			}
+
 			TeamCityReplicas = int32(0)
 			requests         = corev1.ResourceList{
 				"cpu":    resource.MustParse("1"),
@@ -157,7 +166,7 @@ var _ = Describe("TeamCity controller", func() {
 				},
 				Spec: v1alpha1.TeamCitySpec{
 					Image:                  TeamCityImage,
-					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPVC, configDirPVC},
 					Replicas:               &TeamCityReplicas,
 					Requests:               requests,
 					DatabaseSecret:         databaseSecret,
@@ -184,22 +193,12 @@ var _ = Describe("TeamCity controller", func() {
 		})
 
 		It("should successfully reconcile an operand with given secret", func() {
-			By("creating statefulset with configured init container", func() {
-				var producedStatefulSet *v1.StatefulSet
-				producedStatefulSet = statefulSet(ctx, teamcity)
-				Expect(producedStatefulSet).ToNot(BeNil())
-				initContainers := producedStatefulSet.Spec.Template.Spec.InitContainers
-				Expect(initContainers).ToNot(BeNil())
-				Expect(len(initContainers)).To(Equal(1))
-				dirSetupContainer := initContainers[0]
-				Expect(len(dirSetupContainer.VolumeMounts)).To(Equal(1))
-			})
 			By("creating statefulset with mounted secret", func() {
 				var producedStatefulSet *v1.StatefulSet
 				producedStatefulSet = statefulSet(ctx, teamcity)
 				Expect(producedStatefulSet).ToNot(BeNil())
 				teamcityContainer := producedStatefulSet.Spec.Template.Spec.Containers[0]
-				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(2))
+				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(3))
 			})
 		})
 	})

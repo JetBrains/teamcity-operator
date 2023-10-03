@@ -30,3 +30,13 @@ spec:
         resources:
           requests:
             storage: 1Gi
+    - name: teamcity-node-config-dir
+      volumeMount:
+        name: teamcity-node-config-dir
+        mountPath: /storage/config
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
