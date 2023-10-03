@@ -8,9 +8,9 @@ import (
 	"reflect"
 )
 
-func GetSecretE(r *TeamcityReconciler, secretName string, namespace string) (secret v12.Secret, err error) {
+func GetSecretE(r *TeamcityReconciler, ctx context.Context, secretName string, namespace string) (secret v12.Secret, err error) {
 	secretNamespacedName := types.NamespacedName{Namespace: namespace, Name: secretName}
-	if err = r.Get(context.TODO(), secretNamespacedName, &secret); err != nil {
+	if err = r.Get(ctx, secretNamespacedName, &secret); err != nil {
 		return secret, err
 	}
 	return secret, nil
