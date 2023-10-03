@@ -14,40 +14,42 @@ import (
 )
 
 var _ = Describe("TeamCity controller", func() {
-	const (
-		TeamCityName      = "test"
-		TeamCityNamespace = "default"
-		TeamCityImage     = "jetbrains/teamcity-server:latest"
-	)
-	var TeamCityReplicas = int32(0)
-	var teamcity *v1alpha1.TeamCity
-	var (
-		pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
-		pvcStorageClassName = "standard"
-		pvcVolumeMode       = corev1.PersistentVolumeFilesystem
-		pvcResources        = corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceStorage: resource.MustParse("1Gi"),
-			},
-		}
-		pvcName = "test-pvc"
-		pvcSpec = corev1.PersistentVolumeClaimSpec{
-			AccessModes:      pvcAccessMode,
-			StorageClassName: &pvcStorageClassName,
-			VolumeMode:       &pvcVolumeMode,
-			Resources:        pvcResources,
-		}
-		pvc = v1alpha1.CustomPersistentVolumeClaim{
-			Name: pvcName,
-			Spec: pvcSpec,
-		}
-		requests = corev1.ResourceList{
-			"cpu":    resource.MustParse("1"),
-			"memory": resource.MustParse("1000"),
-		}
-	)
 
 	Context("TeamCity controller test", func() {
+		const (
+			TeamCityName      = "test"
+			TeamCityNamespace = "default"
+			TeamCityImage     = "jetbrains/fetchTeamcity-server:latest"
+		)
+
+		var TeamCityReplicas = int32(0)
+		var teamcity *v1alpha1.TeamCity
+		var (
+			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
+			pvcStorageClassName = "standard"
+			pvcVolumeMode       = corev1.PersistentVolumeFilesystem
+			pvcResources        = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			}
+			pvcName = "test-pvc"
+			pvcSpec = corev1.PersistentVolumeClaimSpec{
+				AccessModes:      pvcAccessMode,
+				StorageClassName: &pvcStorageClassName,
+				VolumeMode:       &pvcVolumeMode,
+				Resources:        pvcResources,
+			}
+			pvc = v1alpha1.CustomPersistentVolumeClaim{
+				Name: pvcName,
+				Spec: pvcSpec,
+			}
+			requests = corev1.ResourceList{
+				"cpu":    resource.MustParse("1"),
+				"memory": resource.MustParse("1000"),
+			}
+		)
+
 		BeforeEach(func() {
 			teamcity = &v1alpha1.TeamCity{
 				TypeMeta: metav1.TypeMeta{
@@ -90,10 +92,120 @@ var _ = Describe("TeamCity controller", func() {
 			})
 		})
 	})
+
+	Context("TeamCity controller test with database configurations", func() {
+		const (
+			TeamCityName               = "test-with-database"
+			TeamCityNamespace          = "default"
+			TeamCityImage              = "jetbrains/fetchTeamcity-server:latest"
+			TeamCityDatabaseSecretName = "database-secret"
+		)
+		var (
+			teamcity       *v1alpha1.TeamCity
+			databaseSecret = v1alpha1.DatabaseSecret{
+				Secret: TeamCityDatabaseSecretName,
+			}
+			databaseProperties  *corev1.Secret
+			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
+			pvcStorageClassName = "standard"
+			pvcVolumeMode       = corev1.PersistentVolumeFilesystem
+			pvcResources        = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			}
+			pvcName = "test-pvc"
+			pvcSpec = corev1.PersistentVolumeClaimSpec{
+				AccessModes:      pvcAccessMode,
+				StorageClassName: &pvcStorageClassName,
+				VolumeMode:       &pvcVolumeMode,
+				Resources:        pvcResources,
+			}
+			pvc = v1alpha1.CustomPersistentVolumeClaim{
+				Name:        pvcName,
+				Spec:        pvcSpec,
+				VolumeMount: corev1.VolumeMount{MountPath: "/storage"},
+			}
+			TeamCityReplicas = int32(0)
+			requests         = corev1.ResourceList{
+				"cpu":    resource.MustParse("1"),
+				"memory": resource.MustParse("1000"),
+			}
+		)
+		BeforeEach(func() {
+			databaseProperties = &corev1.Secret{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Secret",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      TeamCityDatabaseSecretName,
+					Namespace: TeamCityNamespace,
+				},
+				Data: map[string][]byte{
+					"database.properties": []byte("connectionUrl=jdbc:mysql://mysql.default:3306/fetchTeamcity\nconnectionProperties.user=root\nconnectionProperties.password=password"),
+				},
+			}
+			teamcity = &v1alpha1.TeamCity{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "jetbrains.com/v1alpha1",
+					Kind:       "TeamCity",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      TeamCityName,
+					Namespace: TeamCityNamespace,
+				},
+				Spec: v1alpha1.TeamCitySpec{
+					Image:                  TeamCityImage,
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					Replicas:               &TeamCityReplicas,
+					Requests:               requests,
+					DatabaseSecret:         databaseSecret,
+				},
+			}
+			Expect(k8sClient.Create(ctx, databaseProperties)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: TeamCityDatabaseSecretName, Namespace: TeamCityNamespace}, databaseProperties)
+				return errors.IsNotFound(err)
+			}, 20).Should(BeFalse())
+			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: TeamCityName, Namespace: TeamCityNamespace}, teamcity)
+				return errors.IsNotFound(err)
+			}, 20).Should(BeFalse())
+		})
+		AfterEach(func() {
+			Expect(k8sClient.Delete(ctx, databaseProperties)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, teamcity)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: teamcity.Name, Namespace: teamcity.Namespace}, teamcity)
+				return errors.IsNotFound(err)
+			}, 5).Should(BeTrue())
+		})
+
+		It("should successfully reconcile an operand with given secret", func() {
+			By("creating statefulset with configured init container", func() {
+				var producedStatefulSet *v1.StatefulSet
+				producedStatefulSet = statefulSet(ctx, teamcity)
+				Expect(producedStatefulSet).ToNot(BeNil())
+				initContainers := producedStatefulSet.Spec.Template.Spec.InitContainers
+				Expect(initContainers).ToNot(BeNil())
+				Expect(len(initContainers)).To(Equal(1))
+				dirSetupContainer := initContainers[0]
+				Expect(len(dirSetupContainer.VolumeMounts)).To(Equal(1))
+			})
+			By("creating statefulset with mounted secret", func() {
+				var producedStatefulSet *v1.StatefulSet
+				producedStatefulSet = statefulSet(ctx, teamcity)
+				Expect(producedStatefulSet).ToNot(BeNil())
+				teamcityContainer := producedStatefulSet.Spec.Template.Spec.Containers[0]
+				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(2))
+			})
+		})
+	})
 })
 
-func statefulSet(ctx context.Context, teamcity *v1alpha1.TeamCity) *v1.StatefulSet {
-	var statefulSet *v1.StatefulSet
+func statefulSet(ctx context.Context, teamcity *v1alpha1.TeamCity) (statefulSet *v1.StatefulSet) {
 	EventuallyWithOffset(1, func() error {
 		var err error
 		statefulSet, err = clientSet.AppsV1().StatefulSets(teamcity.Namespace).Get(ctx, teamcity.Name, metav1.GetOptions{})
