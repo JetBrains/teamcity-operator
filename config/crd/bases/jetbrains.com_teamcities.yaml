@@ -39,9 +39,6 @@ spec:
                 properties:
                   secret:
                     type: string
-                  setupContainerImage:
-                    default: alpine:latest
-                    type: string
                 type: object
               env:
                 additionalProperties:

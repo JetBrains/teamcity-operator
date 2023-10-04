@@ -58,8 +58,7 @@ var _ = Describe("StatefulSet", func() {
 		}
 		xmxPercentage  = int64(95)
 		databaseSecret = v1alpha1.DatabaseSecret{
-			Secret:              "database-secret",
-			SetupContainerImage: "alpine",
+			Secret: "database-secret",
 		}
 	)
 	Describe("Build", func() {

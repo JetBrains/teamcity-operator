@@ -63,8 +63,6 @@ type TeamCitySpec struct {
 
 type DatabaseSecret struct {
 	Secret string `json:"secret,omitempty"`
-	// +kubebuilder:default:="alpine:latest"
-	SetupContainerImage string `json:"setupContainerImage,omitempty"`
 }
 
 type CustomPersistentVolumeClaim struct {
