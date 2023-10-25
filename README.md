@@ -1,7 +1,6 @@
 # tch/teamcity-operator
 
 
-
 ## Getting Started
 
 Download links:
@@ -15,19 +14,22 @@ HTTPS clone URL: https://git.jetbrains.team/tch/teamcity-operator.git
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
 ## Prerequisites
-*If this is the first time, opening this project make sure that `go module support` is enabled.* 
+*If this is the first time, opening this project make sure that `go module integration` is enabled.* 
 
-This setting is responsible for downloading go mods specified in `go.mod` file. It's especially useful if lines in `go.mod` are highlighted with red colour.
+This setting is responsible for automatically downloading go mods specified in `go.mod` file. It's especially useful if lines in `go.mod` are highlighted with red colour.
 ![go_modules_setting.png](docs%2Fgo_modules_setting.png)
 
+Required go version:
 ```
 go version go1.20.4
 ``` 
+Required version of minikube. [Instructions for minikube setup](https://minikube.sigs.k8s.io/docs/start/)
 ```
 minikube version: v1.30.1
 ```
 To run locally/debug(configure *minikube* as your current context):
 ```
+minikube start
 kubectl config current-context
 minikube
 ```
@@ -88,5 +90,10 @@ make deploy #installs controller to the selected kube context
 
 ## Resources
 
-Add links to external resources for this project, such as CI server, bug tracker, etc.
+[Project epic](https://youtrack.jetbrains.com/issue/TCI-95/Design-Teamcity-Kubernetes-Operator)
+
+[Project documentation](https://jetbrains.team/p/tch/documents/folders?f=TeamCity-Kubernetes-operator-2UDmNT3mVmsn)
+
+[TeamCity project which tests and builds operator](https://cloud.teamcity.com/project/DeploymentManagement_Shared_TeamCityOperator)
+
 
