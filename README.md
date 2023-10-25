@@ -15,6 +15,8 @@ HTTPS clone URL: https://git.jetbrains.team/tch/teamcity-operator.git
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
 ## Prerequisites
+*If this is the first time, opening this project make sure that `go module support` is enabled*
+![go_modules_setting.png](docs%2Fgo_modules_setting.png)
 
 ```
 go version go1.20.4
