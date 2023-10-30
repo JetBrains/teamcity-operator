@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sort"
 )
 
 const (
@@ -199,10 +200,18 @@ func environmentVariablesBuilder(instance *v1alpha1.TeamCity, envVarDefaults map
 		mergedMaps[k] = v
 	}
 
-	for key, value := range mergedMaps {
+	//if we don't sort keys we might produce a different env variable array each time
+	keys := make([]string, 0, len(mergedMaps))
+
+	for k, _ := range mergedMaps {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
 		var envVar = v12.EnvVar{
-			Name:      key,
-			Value:     value,
+			Name:      k,
+			Value:     mergedMaps[k],
 			ValueFrom: nil,
 		}
 		envVars = append(envVars, envVar)
