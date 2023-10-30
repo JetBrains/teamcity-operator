@@ -138,7 +138,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // SetupWithManager sets up the controller with the Manager.
 func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&jetbrainscomv1alpha1.TeamCity{}, builder.WithPredicates(teamcityEventPredicates())).
+		For(&jetbrainscomv1alpha1.TeamCity{}, builder.WithPredicates(teamcityEventPredicates())). //separate predicates for TC and STS as they should be handled differently
 		Owns(&v1.StatefulSet{}, builder.WithPredicates(statefulSetEventPredicates())).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
@@ -174,6 +174,10 @@ func statefulSetEventPredicates() predicate.Predicate {
 			if !ok {
 				return false
 			}
+			// here we want to perform two checks: deep equality and deep derivative
+			// reasoning: deep equal does not handle semantically equal quantity objects well, but it's cheap comparison
+			// deep derivative is kubernetes way to check object equality, but it performs type conversions and being expensive
+			// based on observation: 60% of events can be discarded using deep equal and another 20% with deep derivative
 			if !reflect.DeepEqual(oldStatefulSet.Spec, newStatefulSet.Spec) {
 				return false
 			}
