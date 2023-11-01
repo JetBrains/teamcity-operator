@@ -105,7 +105,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ginkgo --coverprofile=cover.out -coverpkg=./... -v -r ./... ${TEST_FLAGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ginkgo --teamcity-report report.out --coverprofile=cover.out -coverpkg=./... -v -r ./... ${TEST_FLAGS}
 
 ##@ Build
 

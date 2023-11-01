@@ -2,3 +2,4 @@
 /.idea/*
 !/.idea/runConfigurations
 cover.out
+report.out
