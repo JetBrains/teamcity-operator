@@ -17,11 +17,6 @@ import (
 )
 
 var _ = Describe("StatefulSet", func() {
-	const (
-		TeamCityName      = "test"
-		TeamCityNamespace = "default"
-		TeamCityImage     = "jetbrains/teamcity-server:latest"
-	)
 	var (
 		instance           v1alpha1.TeamCity
 		scheme             *runtime.Scheme

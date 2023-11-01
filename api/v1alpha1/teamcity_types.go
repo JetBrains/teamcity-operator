@@ -29,13 +29,14 @@ type TeamCitySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of TeamCity. Edit teamcity_types.go to remove/update
 	Image                  string                        `json:"image"`
 	Replicas               *int32                        `json:"replicas"`
 	Requests               v1.ResourceList               `json:"requests"` // mandatory, since we rely on it with Xmx setup
 	Env                    map[string]string             `json:"env,omitempty"`
 	Limits                 v1.ResourceList               `json:"limits,omitempty"`
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims"` //mandatory, we need at least one volume for data persistence
+
+	InitContainers []v1.Container `json:"initContainers,omitempty"`
 
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage"`

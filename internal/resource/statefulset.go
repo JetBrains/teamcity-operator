@@ -47,8 +47,8 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 
 	var volumes []v12.Volume
-	var initContainers []v12.Container
 
+	initContainers := builder.Instance.Spec.InitContainers
 	volumeMounts := volumeMountsBuilder(builder.Instance)
 
 	builder.data = TeamCityComputedValues{
@@ -106,6 +106,7 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	} else {
 		statefulSet.Spec.Template.Spec.Containers[0] = containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)
 	}
+	statefulSet.Spec.Template.Spec.InitContainers = builder.Instance.Spec.InitContainers
 
 	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)

@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 )
 
 var _ = Describe("TeamCity controller", func() {
@@ -65,6 +66,7 @@ var _ = Describe("TeamCity controller", func() {
 					Replicas:               &TeamCityReplicas,
 					Requests:               requests,
 					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					InitContainers:         getInitContainers(),
 				},
 			}
 			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())
@@ -89,6 +91,11 @@ var _ = Describe("TeamCity controller", func() {
 				producedStatefulSet = statefulSet(ctx, teamcity)
 				Expect(producedStatefulSet.Spec.Template.Spec.Containers[0].Image).To(Equal(TeamCityImage))
 				Expect(producedStatefulSet.Spec.Replicas).To(Equal(&TeamCityReplicas))
+			})
+			By("adds init containers", func() {
+				var producedStatefulSet *v1.StatefulSet
+				producedStatefulSet = statefulSet(ctx, teamcity)
+				Expect(producedStatefulSet.Spec.Template.Spec.InitContainers).To(Equal(getInitContainers()))
 			})
 		})
 	})
@@ -170,6 +177,7 @@ var _ = Describe("TeamCity controller", func() {
 					Replicas:               &TeamCityReplicas,
 					Requests:               requests,
 					DatabaseSecret:         databaseSecret,
+					InitContainers:         getInitContainers(),
 				},
 			}
 			Expect(k8sClient.Create(ctx, databaseProperties)).To(Succeed())
@@ -200,6 +208,11 @@ var _ = Describe("TeamCity controller", func() {
 				teamcityContainer := producedStatefulSet.Spec.Template.Spec.Containers[0]
 				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(3))
 			})
+			By("adds init containers", func() {
+				var producedStatefulSet *v1.StatefulSet
+				producedStatefulSet = statefulSet(ctx, teamcity)
+				Expect(producedStatefulSet.Spec.Template.Spec.InitContainers).To(Equal(getInitContainers()))
+			})
 		})
 	})
 })
@@ -211,4 +224,31 @@ func statefulSet(ctx context.Context, teamcity *v1alpha1.TeamCity) (statefulSet 
 		return err
 	}, 10).Should(Succeed())
 	return statefulSet
+}
+
+func getInitContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			Name:  "volume-permissions",
+			Image: "busybox",
+			Command: []string{
+				"sh",
+				"-c",
+				"chown -R 1000:1000 /storage",
+			},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsNonRoot: pointer.Bool(false),
+				RunAsUser:    pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "teamcity-node-volume1",
+					MountPath: "/storage",
+				},
+			},
+			TerminationMessagePath:   "/dev/termination-log",
+			TerminationMessagePolicy: "File",
+			ImagePullPolicy:          "Always",
+		},
+	}
 }
