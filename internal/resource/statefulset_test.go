@@ -125,7 +125,6 @@ var _ = Describe("StatefulSet", func() {
 					Spec: pvcSpec,
 				},
 			}
-			println("expected: ", expected)
 			actual := statefulSet.Spec.VolumeClaimTemplates
 			Expect(actual).To(Equal(expected))
 		})
