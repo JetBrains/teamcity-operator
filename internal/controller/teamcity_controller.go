@@ -20,24 +20,21 @@ import (
 	"context"
 	"fmt"
 	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	"git.jetbrains.team/tch/teamcity-operator/internal/validator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
@@ -138,61 +135,10 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // SetupWithManager sets up the controller with the Manager.
 func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&jetbrainscomv1alpha1.TeamCity{}, builder.WithPredicates(teamcityEventPredicates())). //separate predicates for TC and STS as they should be handled differently
-		Owns(&v1.StatefulSet{}, builder.WithPredicates(statefulSetEventPredicates())).
+		For(&jetbrainscomv1alpha1.TeamCity{}, builder.WithPredicates(predicate.TeamcityEventPredicates())). //separate predicates for TC and STS as they should be handled differently
+		Owns(&v1.StatefulSet{}, builder.WithPredicates(predicate.StatefulSetEventPredicates())).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
-}
-func teamcityEventPredicates() predicate.Predicate {
-	return predicate.Funcs{
-		CreateFunc: func(createEvent event.CreateEvent) bool {
-			return true
-		},
-		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
-			return true
-		},
-		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-			return !deleteEvent.DeleteStateUnknown
-		},
-		GenericFunc: func(genericEvent event.GenericEvent) bool {
-			return true
-		},
-	}
-}
-
-func statefulSetEventPredicates() predicate.Predicate {
-	return predicate.Funcs{
-		CreateFunc: func(createEvent event.CreateEvent) bool {
-			return true
-		},
-		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
-			oldStatefulSet, ok := updateEvent.ObjectOld.(*v1.StatefulSet)
-			if !ok {
-				return false
-			}
-			newStatefulSet, ok := updateEvent.ObjectNew.(*v1.StatefulSet)
-			if !ok {
-				return false
-			}
-			// here we want to perform two checks: deep equality and deep derivative
-			// reasoning: deep equal does not handle semantically equal quantity objects well, but it's cheap comparison
-			// deep derivative is kubernetes way to check object equality, but it performs type conversions and being expensive
-			// based on observation: 60% of events can be discarded using deep equal and another 20% with deep derivative
-			if !reflect.DeepEqual(oldStatefulSet.Spec, newStatefulSet.Spec) {
-				return false
-			}
-			if equality.Semantic.DeepDerivative(oldStatefulSet.Spec, newStatefulSet.Spec) {
-				return false
-			}
-			return true
-		},
-		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-			return !deleteEvent.DeleteStateUnknown
-		},
-		GenericFunc: func(genericEvent event.GenericEvent) bool {
-			return true
-		},
-	}
 }
 
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *jetbrainscomv1alpha1.TeamCity) error {
