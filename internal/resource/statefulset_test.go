@@ -32,14 +32,14 @@ var _ = Describe("StatefulSet", func() {
 				corev1.ResourceStorage: resource.MustParse("1Gi"),
 			},
 		}
-		pvcName = "test-pvc"
+		pvcName = "test-dataDirPvc"
 		pvcSpec = corev1.PersistentVolumeClaimSpec{
 			AccessModes:      pvcAccessMode,
 			StorageClassName: &pvcStorageClassName,
 			VolumeMode:       &pvcVolumeMode,
 			Resources:        pvcResources,
 		}
-		pvc = v1alpha1.CustomPersistentVolumeClaim{
+		dataDirPvc = v1alpha1.CustomPersistentVolumeClaim{
 			Name: pvcName,
 			Spec: pvcSpec,
 			VolumeMount: corev1.VolumeMount{
@@ -66,7 +66,7 @@ var _ = Describe("StatefulSet", func() {
 				Spec: v1alpha1.TeamCitySpec{
 					Image:                  TeamCityImage,
 					Replicas:               &TeamCityReplicas,
-					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
 					Requests:               requests,
 					XmxPercentage:          xmxPercentage,
 					DatabaseSecret:         databaseSecret,
@@ -126,6 +126,8 @@ var _ = Describe("StatefulSet", func() {
 		It("sets required resources requests for container", func() {
 			obj, err := statefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
+			err = statefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 			expected := corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -140,6 +142,8 @@ var _ = Describe("StatefulSet", func() {
 		It("sets prestop command for container", func() {
 			obj, err := statefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
+			err = statefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 			expected := []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"}
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command
@@ -147,6 +151,8 @@ var _ = Describe("StatefulSet", func() {
 		})
 		It("calculates and provides env vars correctly", func() {
 			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = statefulSetBuilder.Update(obj)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
@@ -179,6 +185,8 @@ var _ = Describe("StatefulSet", func() {
 		})
 		It("mounts database secret correctly", func() {
 			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = statefulSetBuilder.Update(obj)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 
@@ -214,7 +222,7 @@ var _ = Describe("StatefulSet", func() {
 				Spec: v1alpha1.TeamCitySpec{
 					Image:                  TeamCityImage,
 					Replicas:               &TeamCityReplicas,
-					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
 					Requests:               requests,
 				},
 			}

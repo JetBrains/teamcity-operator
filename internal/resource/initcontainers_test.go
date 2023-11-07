@@ -20,6 +20,8 @@ var _ = Describe("StatefulSetWithInitContainers", func() {
 		It("adds init containers", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
 			sts := obj.(*v1.StatefulSet)
 			Expect(sts.Spec.Template.Spec.InitContainers).To(Equal(getInitContainers()))
 		})
