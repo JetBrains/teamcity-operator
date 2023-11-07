@@ -68,17 +68,18 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 }
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
+	var dataDirVolumeMount v12.VolumeMount
+	var configDirVolumeMount v12.VolumeMount
 	var volumes []v12.Volume
-	extraEnvVars := make(map[string]string)
+	var extraEnvVars = make(map[string]string)
 
 	statefulSet := object.(*v1.StatefulSet)
 
 	volumeMounts := volumeMountsBuilder(builder.Instance)
 
-	dataDirVolume := volumeMounts[0]
-	dataDirPath := dataDirVolume.MountPath
-	configDirVolume := volumeMounts[1]
-	configDirPath := configDirVolume.MountPath
+	dataDirVolumeMount, configDirVolumeMount = builder.defineTeamCityDirectories(volumeMounts)
+	dataDirPath := dataDirVolumeMount.MountPath
+	configDirPath := configDirVolumeMount.MountPath
 
 	initContainers := builder.Instance.Spec.InitContainers
 
@@ -92,12 +93,10 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	if builder.Instance.StartUpPropertiesConfigMapProvided() {
 		startupPropertiesVolume := builder.startupPropertiesVolumeBuilder()
 		volumes = append(volumes, startupPropertiesVolume)
-
-		startupPropertiesMount := startupPropertiesMountsBuilder()
-
-		sourceStartupPropertiesPath := startupPropertiesMount.MountPath
+		startupPropertiesVolumeMount := startupPropertiesMountsBuilder()
+		sourceStartupPropertiesPath := startupPropertiesVolumeMount.MountPath
 		destinationStartupPropertiesPath := configDirPath + "/" + TEAMCITY_STARTUP_PROPERTIES_SUB_PATH
-		copyStartupPropertiesContainer := builder.configMapCopyInitContainerBuilder(startupPropertiesMount, configDirVolume, sourceStartupPropertiesPath, destinationStartupPropertiesPath, DEFAULT_IMAGE_FOR_INIT_CONTAINERS)
+		copyStartupPropertiesContainer := builder.configMapCopyInitContainerBuilder(startupPropertiesVolumeMount, configDirVolumeMount, sourceStartupPropertiesPath, destinationStartupPropertiesPath, DEFAULT_IMAGE_FOR_INIT_CONTAINERS)
 		initContainers = append(initContainers, copyStartupPropertiesContainer)
 		extraEnvVars[TEAMCITY_CONFIGURATION_PATH_ENV_VARIABLE] = destinationStartupPropertiesPath
 	}
@@ -283,4 +282,16 @@ func (builder *StatefulSetBuilder) startupPropertiesVolumeBuilder() v12.Volume {
 			},
 		},
 	}
+}
+
+func (builder *StatefulSetBuilder) defineTeamCityDirectories(mounts []v12.VolumeMount) (dataDir v12.VolumeMount, configDir v12.VolumeMount) {
+	if len(mounts) > 0 {
+		dataDir = mounts[0]
+	}
+	if len(mounts) > 1 {
+		configDir = mounts[1]
+	} else {
+		configDir = dataDir
+	}
+	return dataDir, configDir
 }
