@@ -22,7 +22,7 @@ var _ = Describe("Predicate", func() {
 					ObjectOld: &v1.StatefulSet{Spec: v1.StatefulSetSpec{Template: v12.PodTemplateSpec{Spec: v12.PodSpec{Containers: []v12.Container{{Image: "nginx"}}}}}},
 					ObjectNew: &v1.StatefulSet{Spec: v1.StatefulSetSpec{Template: v12.PodTemplateSpec{Spec: v12.PodSpec{Containers: []v12.Container{{Image: "ngins"}}}}}},
 				})
-				Expect(result).To(Equal(false))
+				Expect(result).To(Equal(true))
 			})
 			By("returning false when update event contains NO difference in Spec field", func() {
 				result := predicate.Update(event.UpdateEvent{
