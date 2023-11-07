@@ -16,9 +16,15 @@ import (
 
 const (
 	DATABASE_PROPERTIES_VOLUME_NAME         = "database-properties"
-	DIR_SETUP_CONTAINER_NAME                = "dir-setup"
 	TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH = "/config/database.properties"
 	TEAMCITY_DATABASE_PROPERTIES_SUB_PATH   = "database.properties"
+
+	TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME = "startup-properties"
+	TEAMCITY_STARTUP_PROPERTIES_MOUNT_PATH  = "/config/teamcity-startup.properties"
+	TEAMCITY_STARTUP_PROPERTIES_SUB_PATH    = "teamcity-startup.properties"
+	DEFAULT_IMAGE_FOR_INIT_CONTAINERS       = "busybox:1.28"
+
+	TEAMCITY_CONFIGURATION_PATH_ENV_VARIABLE = "TEAMCITY_CONFIGURATION_PATH"
 )
 
 type TeamCityComputedValues struct {
