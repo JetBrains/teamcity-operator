@@ -108,6 +108,10 @@ func (instance *TeamCity) StartUpPropertiesConfigMapProvided() bool {
 	return instance.Spec.StartupPropertiesConfigMap != ""
 }
 
+func (instance *TeamCity) DatabaseSecretProvided() bool {
+	return instance.Spec.DatabaseSecret.Secret != ""
+}
+
 func init() {
 	SchemeBuilder.Register(&TeamCity{}, &TeamCityList{})
 }
