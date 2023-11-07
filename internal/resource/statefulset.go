@@ -27,23 +27,12 @@ const (
 	TEAMCITY_CONFIGURATION_PATH_ENV_VARIABLE = "TEAMCITY_CONFIGURATION_PATH"
 )
 
-type TeamCityComputedValues struct {
-	NodeID       string
-	DataDirPath  string
-	VolumeMounts []v12.VolumeMount
-}
-
 type StatefulSetBuilder struct {
 	*TeamCityResourceBuilder
-	data TeamCityComputedValues
 }
 
 func (builder *TeamCityResourceBuilder) StatefulSet() *StatefulSetBuilder {
-	return &StatefulSetBuilder{builder, TeamCityComputedValues{
-		NodeID:       "",
-		DataDirPath:  "",
-		VolumeMounts: nil,
-	}}
+	return &StatefulSetBuilder{builder}
 }
 
 func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
@@ -51,28 +40,8 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-
-	var volumes []v12.Volume
-
-	initContainers := builder.Instance.Spec.InitContainers
-	volumeMounts := volumeMountsBuilder(builder.Instance)
-
-	builder.data = TeamCityComputedValues{
-		NodeID:       builder.Instance.Name,
-		DataDirPath:  volumeMounts[0].MountPath,
-		VolumeMounts: volumeMounts,
-	}
-
-	databaseSecretProvided := builder.Instance.Spec.DatabaseSecret.Secret != ""
-
-	if databaseSecretProvided {
-		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
-		volumes = append(volumes, secretVolume)
-		secretVolumeMounts := secretMountsBuilder(builder.data.DataDirPath)
-		builder.data.VolumeMounts = append(builder.data.VolumeMounts, secretVolumeMounts)
-	}
-
 	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +59,8 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 			VolumeClaimTemplates: pvcList,
 			Template: v12.PodTemplateSpec{
 				Spec: v12.PodSpec{
-					Volumes:        volumes,
-					InitContainers: initContainers,
-					Containers:     []v12.Container{containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)},
+					InitContainers: []v12.Container{},
+					Containers:     []v12.Container{},
 				},
 			},
 		},
@@ -100,24 +68,58 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 }
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
+	var volumes []v12.Volume
+	extraEnvVars := make(map[string]string)
+
 	statefulSet := object.(*v1.StatefulSet)
+
+	volumeMounts := volumeMountsBuilder(builder.Instance)
+
+	dataDirVolume := volumeMounts[0]
+	dataDirPath := dataDirVolume.MountPath
+	configDirVolume := volumeMounts[1]
+	configDirPath := configDirVolume.MountPath
+
+	initContainers := builder.Instance.Spec.InitContainers
+
+	if builder.Instance.DatabaseSecretProvided() {
+		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
+		volumes = append(volumes, secretVolume)
+		secretVolumeMounts := secretMountsBuilder(dataDirPath)
+		volumeMounts = append(volumeMounts, secretVolumeMounts)
+	}
+
+	if builder.Instance.StartUpPropertiesConfigMapProvided() {
+		startupPropertiesVolume := builder.startupPropertiesVolumeBuilder()
+		volumes = append(volumes, startupPropertiesVolume)
+
+		startupPropertiesMount := startupPropertiesMountsBuilder()
+
+		sourceStartupPropertiesPath := startupPropertiesMount.MountPath
+		destinationStartupPropertiesPath := configDirPath + "/" + TEAMCITY_STARTUP_PROPERTIES_SUB_PATH
+		copyStartupPropertiesContainer := builder.configMapCopyInitContainerBuilder(startupPropertiesMount, configDirVolume, sourceStartupPropertiesPath, destinationStartupPropertiesPath, DEFAULT_IMAGE_FOR_INIT_CONTAINERS)
+		initContainers = append(initContainers, copyStartupPropertiesContainer)
+		extraEnvVars[TEAMCITY_CONFIGURATION_PATH_ENV_VARIABLE] = destinationStartupPropertiesPath
+	}
+
+	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(dataDirPath)
+	envVars := builder.environmentVariablesBuilder(defaultEnvVars, extraEnvVars)
 
 	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
 	statefulSet.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 
 	statefulSet.Spec.Template.Labels = metadata.Label(builder.Instance.Name)
 	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
-	if statefulSet.Spec.Template.Spec.Containers == nil {
-		statefulSet.Spec.Template.Spec.Containers = []v12.Container{containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)}
-	} else {
-		statefulSet.Spec.Template.Spec.Containers[0] = containerSpecBuilder(builder.Instance, builder.data.VolumeMounts, builder.data.DataDirPath, builder.data.NodeID)
-	}
-	statefulSet.Spec.Template.Spec.InitContainers = builder.Instance.Spec.InitContainers
+
+	statefulSet.Spec.Template.Spec.Volumes = volumes
+	statefulSet.Spec.Template.Spec.InitContainers = initContainers
+
+	teamcityContainer := builder.containerSpecBuilder(volumeMounts, envVars)
+	statefulSet.Spec.Template.Spec.Containers = []v12.Container{teamcityContainer}
 
 	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)
 	}
-
 	return nil
 }
 
@@ -139,7 +141,8 @@ func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *ru
 	return pvcList, nil
 }
 
-func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.VolumeMount, dataDirPath string, nodeId string) v12.Container {
+func (builder *StatefulSetBuilder) containerSpecBuilder(volumeMounts []v12.VolumeMount, env []v12.EnvVar) v12.Container {
+	instance := builder.Instance
 	var container = v12.Container{
 		Name:  instance.Name,
 		Image: instance.Spec.Image,
@@ -153,6 +156,7 @@ func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.Volume
 	container.LivenessProbe = &instance.Spec.LivenessProbeSettings
 	container.ReadinessProbe = &instance.Spec.ReadinessProbeSettings
 	container.StartupProbe = &instance.Spec.StartupProbeSettings
+
 	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
 	container.ReadinessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
 	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
@@ -162,16 +166,7 @@ func containerSpecBuilder(instance *v1alpha1.TeamCity, volumeMounts []v12.Volume
 
 	container.VolumeMounts = volumeMounts
 
-	var envVarDefaults = map[string]string{
-		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(instance.Spec.XmxPercentage, container.Resources.Requests.Memory().Value())),
-		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", dataDirPath),
-		"TEAMCITY_LOGS_PATH":       fmt.Sprintf("%s%s", dataDirPath, "/logs"),
-		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
-			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", nodeId) +
-			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", nodeId) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", nodeId),
-	}
-	container.Env = environmentVariablesBuilder(instance, envVarDefaults)
+	container.Env = env
 
 	return container
 }
@@ -195,7 +190,20 @@ func lifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
 	return
 }
 
-func environmentVariablesBuilder(instance *v1alpha1.TeamCity, envVarDefaults map[string]string) (envVars []v12.EnvVar) {
+func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(dataDirPath string) map[string]string {
+	return map[string]string{
+		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(builder.Instance.Spec.XmxPercentage, builder.Instance.Spec.Requests.Memory().Value())),
+		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", dataDirPath),
+		"TEAMCITY_LOGS_PATH":       fmt.Sprintf("%s%s", dataDirPath, "/logs"),
+		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
+			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", builder.Instance.Name) +
+			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", builder.Instance.Name) +
+			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", builder.Instance.Name),
+	}
+}
+
+func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults map[string]string, extraVars map[string]string) (envVars []v12.EnvVar) {
+
 	// merge with defaults
 	envVars = []v12.EnvVar{}
 
@@ -203,7 +211,10 @@ func environmentVariablesBuilder(instance *v1alpha1.TeamCity, envVarDefaults map
 	for k, v := range envVarDefaults {
 		mergedMaps[k] = v
 	}
-	for k, v := range instance.Spec.Env {
+	for k, v := range builder.Instance.Spec.Env {
+		mergedMaps[k] = v
+	}
+	for k, v := range extraVars {
 		mergedMaps[k] = v
 	}
 
