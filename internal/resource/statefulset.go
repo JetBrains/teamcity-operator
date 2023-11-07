@@ -246,3 +246,30 @@ func databaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
 		},
 	}
 }
+
+func (builder *StatefulSetBuilder) configMapCopyInitContainerBuilder(sourceVolumeMount v12.VolumeMount, destinationVolumeMount v12.VolumeMount, sourceFilePath string, destinationFilePath string, image string) v12.Container {
+	containerName := fmt.Sprintf("%s-%s", builder.Instance.Spec.StartupPropertiesConfigMap, "setup")
+	return v12.Container{
+		Name:         containerName,
+		Image:        image,
+		Command:      []string{"sh", "-c", fmt.Sprintf("cp %s %s", sourceFilePath, destinationFilePath)},
+		VolumeMounts: []v12.VolumeMount{sourceVolumeMount, destinationVolumeMount},
+	}
+}
+
+func startupPropertiesMountsBuilder() v12.VolumeMount {
+	return v12.VolumeMount{Name: TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME, MountPath: TEAMCITY_STARTUP_PROPERTIES_MOUNT_PATH, SubPath: TEAMCITY_STARTUP_PROPERTIES_SUB_PATH}
+}
+
+func (builder *StatefulSetBuilder) startupPropertiesVolumeBuilder() v12.Volume {
+	return v12.Volume{
+		Name: TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME,
+		VolumeSource: v12.VolumeSource{
+			ConfigMap: &v12.ConfigMapVolumeSource{
+				LocalObjectReference: v12.LocalObjectReference{
+					Name: builder.Instance.Spec.StartupPropertiesConfigMap,
+				},
+			},
+		},
+	}
+}
