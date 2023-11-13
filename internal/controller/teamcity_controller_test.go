@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("TeamCity controller", func() {
 
-	Context("TeamCity controller test", func() {
+	Context("TeamCity with minimum configuration", func() {
 		const (
 			TeamCityName      = "test"
 			TeamCityNamespace = "default"
@@ -100,7 +100,7 @@ var _ = Describe("TeamCity controller", func() {
 		})
 	})
 
-	Context("TeamCity controller test with database configurations", func() {
+	Context("TeamCity with database configurations", func() {
 		const (
 			TeamCityName               = "test-with-database"
 			TeamCityNamespace          = "default"
