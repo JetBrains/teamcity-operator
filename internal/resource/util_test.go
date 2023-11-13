@@ -7,7 +7,7 @@ import (
 
 var _ = Describe("Util", func() {
 	Context("Sort", func() {
-		It("sorts map correctly", func() {
+		It("processes map with unsorted keys correctly", func() {
 			testMap := map[string]string{
 				"a": "1",
 				"c": "2",
