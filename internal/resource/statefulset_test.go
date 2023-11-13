@@ -56,7 +56,7 @@ var _ = Describe("StatefulSet", func() {
 			Secret: "database-secret",
 		}
 	)
-	Describe("Build", func() {
+	Describe("Build & Update", func() {
 		BeforeEach(func() {
 			instance = v1alpha1.TeamCity{
 				ObjectMeta: metav1.ObjectMeta{
@@ -208,34 +208,6 @@ var _ = Describe("StatefulSet", func() {
 			Expect(databaseSecretPathSplit).To(Equal([]string{datadirPathClean, "config", TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}))
 
 		})
-
-	})
-
-	Describe("Update", func() {
-		var statefulSetBuilder *StatefulSetBuilder
-		BeforeEach(func() {
-			instance = v1alpha1.TeamCity{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      TeamCityName,
-					Namespace: TeamCityNamespace,
-				},
-				Spec: v1alpha1.TeamCitySpec{
-					Image:                  TeamCityImage,
-					Replicas:               &TeamCityReplicas,
-					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
-					Requests:               requests,
-				},
-			}
-			scheme = runtime.NewScheme()
-			Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
-
-			builder = &TeamCityResourceBuilder{
-				Instance: &instance,
-				Scheme:   scheme,
-			}
-			statefulSetBuilder = builder.StatefulSet()
-		})
 		It("sets the owner reference", func() {
 			statefulSet := &v1.StatefulSet{
 				ObjectMeta: metav1.ObjectMeta{
@@ -247,6 +219,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(statefulSet.OwnerReferences)).To(Equal(1))
 			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
 		})
+
 	})
 })
 

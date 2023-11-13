@@ -11,7 +11,7 @@ import (
 )
 
 var _ = Describe("StatefulSetWithInitContainers", func() {
-	Describe("Build", func() {
+	Describe("Build & Update", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *v1alpha1.TeamCity) {
 				teamcity.Spec.InitContainers = getInitContainers()
@@ -24,14 +24,6 @@ var _ = Describe("StatefulSetWithInitContainers", func() {
 			Expect(err).NotTo(HaveOccurred())
 			sts := obj.(*v1.StatefulSet)
 			Expect(sts.Spec.Template.Spec.InitContainers).To(Equal(getInitContainers()))
-		})
-	})
-
-	Describe("Update", func() {
-		BeforeEach(func() {
-			BeforeEachUpdate(func(teamcity *v1alpha1.TeamCity) {
-				teamcity.Spec.InitContainers = getInitContainers()
-			})
 		})
 		It("adds init containers after update", func() {
 			statefulSet := &v1.StatefulSet{
