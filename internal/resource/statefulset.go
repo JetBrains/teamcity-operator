@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sort"
 )
 
 const (
@@ -20,7 +19,7 @@ const (
 	TEAMCITY_DATABASE_PROPERTIES_SUB_PATH   = "database.properties"
 
 	TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME = "startup-properties"
-	TEAMCITY_STARTUP_PROPERTIES_MOUNT_PATH  = "/config/teamcity-startup.properties"
+	TEAMCITY_STARTUP_PROPERTIES_MOUNT_PATH  = "/opt/teamcity/teamcity-startup.properties"
 	TEAMCITY_STARTUP_PROPERTIES_SUB_PATH    = "teamcity-startup.properties"
 	DEFAULT_IMAGE_FOR_INIT_CONTAINERS       = "busybox:1.28"
 
@@ -69,17 +68,16 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	var dataDirVolumeMount v12.VolumeMount
-	var configDirVolumeMount v12.VolumeMount
 	var volumes []v12.Volume
+	var extraServerOpts string
 	var extraEnvVars = make(map[string]string)
 
 	statefulSet := object.(*v1.StatefulSet)
 
 	volumeMounts := volumeMountsBuilder(builder.Instance)
 
-	dataDirVolumeMount, configDirVolumeMount = builder.defineTeamCityDirectories(volumeMounts)
+	dataDirVolumeMount, _ = builder.defineTeamCityDirectories(volumeMounts)
 	dataDirPath := dataDirVolumeMount.MountPath
-	configDirPath := configDirVolumeMount.MountPath
 
 	initContainers := builder.Instance.Spec.InitContainers
 
@@ -90,18 +88,12 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 		volumeMounts = append(volumeMounts, secretVolumeMounts)
 	}
 
-	if builder.Instance.StartUpPropertiesConfigMapProvided() {
-		startupPropertiesVolume := builder.startupPropertiesVolumeBuilder()
-		volumes = append(volumes, startupPropertiesVolume)
-		startupPropertiesVolumeMount := startupPropertiesMountsBuilder()
-		sourceStartupPropertiesPath := startupPropertiesVolumeMount.MountPath
-		destinationStartupPropertiesPath := configDirPath + "/" + TEAMCITY_STARTUP_PROPERTIES_SUB_PATH
-		copyStartupPropertiesContainer := builder.configMapCopyInitContainerBuilder(startupPropertiesVolumeMount, configDirVolumeMount, sourceStartupPropertiesPath, destinationStartupPropertiesPath, DEFAULT_IMAGE_FOR_INIT_CONTAINERS)
-		initContainers = append(initContainers, copyStartupPropertiesContainer)
-		extraEnvVars[TEAMCITY_CONFIGURATION_PATH_ENV_VARIABLE] = destinationStartupPropertiesPath
+	if builder.Instance.StartUpPropertiesConfigProvided() {
+		extraServerOpts = builder.convertStartUpPropertiesToServerOptions()
 	}
 
-	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(dataDirPath)
+	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(dataDirPath, extraServerOpts)
+
 	envVars := builder.environmentVariablesBuilder(defaultEnvVars, extraEnvVars)
 
 	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
@@ -189,7 +181,7 @@ func lifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
 	return
 }
 
-func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(dataDirPath string) map[string]string {
+func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(dataDirPath string, extraServerOpts string) map[string]string {
 	return map[string]string{
 		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(builder.Instance.Spec.XmxPercentage, builder.Instance.Spec.Requests.Memory().Value())),
 		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", dataDirPath),
@@ -197,7 +189,8 @@ func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(dataDirPath
 		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", builder.Instance.Name) +
 			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", builder.Instance.Name) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", builder.Instance.Name),
+			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", builder.Instance.Name) +
+			extraServerOpts,
 	}
 }
 
@@ -218,12 +211,7 @@ func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults ma
 	}
 
 	//if we don't sort keys we might produce a different env variable array each time
-	keys := make([]string, 0, len(mergedMaps))
-
-	for k, _ := range mergedMaps {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := SortKeysAlphabeticallyInMap(mergedMaps)
 
 	for _, k := range keys {
 		var envVar = v12.EnvVar{
@@ -257,31 +245,12 @@ func databaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
 	}
 }
 
-func (builder *StatefulSetBuilder) configMapCopyInitContainerBuilder(sourceVolumeMount v12.VolumeMount, destinationVolumeMount v12.VolumeMount, sourceFilePath string, destinationFilePath string, image string) v12.Container {
-	containerName := fmt.Sprintf("%s-%s", builder.Instance.Spec.StartupPropertiesConfigMap, "setup")
-	return v12.Container{
-		Name:         containerName,
-		Image:        image,
-		Command:      []string{"sh", "-c", fmt.Sprintf("cp %s %s", sourceFilePath, destinationFilePath)},
-		VolumeMounts: []v12.VolumeMount{sourceVolumeMount, destinationVolumeMount},
+func (builder *StatefulSetBuilder) convertStartUpPropertiesToServerOptions() (res string) {
+	sortedKeys := SortKeysAlphabeticallyInMap(builder.Instance.Spec.StartupPropertiesConfig)
+	for _, k := range sortedKeys {
+		res += fmt.Sprintf(" -D%s=%s", k, builder.Instance.Spec.StartupPropertiesConfig[k])
 	}
-}
-
-func startupPropertiesMountsBuilder() v12.VolumeMount {
-	return v12.VolumeMount{Name: TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME, MountPath: TEAMCITY_STARTUP_PROPERTIES_MOUNT_PATH, SubPath: TEAMCITY_STARTUP_PROPERTIES_SUB_PATH}
-}
-
-func (builder *StatefulSetBuilder) startupPropertiesVolumeBuilder() v12.Volume {
-	return v12.Volume{
-		Name: TEAMCITY_STARTUP_PROPERTIES_VOLUME_NAME,
-		VolumeSource: v12.VolumeSource{
-			ConfigMap: &v12.ConfigMapVolumeSource{
-				LocalObjectReference: v12.LocalObjectReference{
-					Name: builder.Instance.Spec.StartupPropertiesConfigMap,
-				},
-			},
-		},
-	}
+	return
 }
 
 func (builder *StatefulSetBuilder) defineTeamCityDirectories(mounts []v12.VolumeMount) (dataDir v12.VolumeMount, configDir v12.VolumeMount) {

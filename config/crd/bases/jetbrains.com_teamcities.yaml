@@ -2287,9 +2287,10 @@ spec:
                     format: int32
                     type: integer
                 type: object
-              startupPropertiesConfigMap:
-                default: ""
-                type: string
+              startupPropertiesConfig:
+                additionalProperties:
+                  type: string
+                type: object
               teamCityServerPort:
                 default:
                   containerPort: 8111
@@ -2334,7 +2335,7 @@ spec:
             - podSecurityContext
             - replicas
             - requests
-            - startupPropertiesConfigMap
+            - startupPropertiesConfig
             - xmxPercentage
             type: object
           status:

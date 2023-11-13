@@ -60,9 +60,8 @@ type TeamCitySpec struct {
 	HealthEndpoint v1.HTTPGetAction `json:"healthEndpoint,omitempty"`
 	// +kubebuilder:default:={}
 	DatabaseSecret DatabaseSecret `json:"databaseSecret,omitempty"`
-
-	// +kubebuilder:default:=""
-	StartupPropertiesConfigMap string `json:"startupPropertiesConfigMap"`
+	// +kubebuilder:default:={}
+	StartupPropertiesConfig map[string]string `json:"startupPropertiesConfig"`
 }
 
 type DatabaseSecret struct {
@@ -104,8 +103,8 @@ type TeamCityList struct {
 	Items           []TeamCity `json:"items"`
 }
 
-func (instance *TeamCity) StartUpPropertiesConfigMapProvided() bool {
-	return instance.Spec.StartupPropertiesConfigMap != ""
+func (instance *TeamCity) StartUpPropertiesConfigProvided() bool {
+	return len(instance.Spec.StartupPropertiesConfig) != 0
 }
 
 func (instance *TeamCity) DatabaseSecretProvided() bool {

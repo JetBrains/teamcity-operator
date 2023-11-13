@@ -1,16 +1,3 @@
-#file: noinspection YAMLSchemaValidation
-apiVersion: v1
-data:
-  teamcity-startup.properties: |+
-    teamcity.startup.maintenance=false
-    teamcity.licenseAgreement.accepted=true
-    teamcity.firstStart.setupAdmin.enabled=false
-    teamcity.superUser.token=token123
-kind: ConfigMap
-metadata:
-  name: startup-properties
-  namespace: default
----
 apiVersion: jetbrains.com/v1alpha1
 kind: TeamCity
 metadata:
@@ -20,14 +7,18 @@ metadata:
     app.kubernetes.io/part-of: teamcity-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: teamcity-operator
-  name: teamcity-sample-with-startup-properties
+  name: teamcity-with-startup-properties
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
   replicas: 1
-  startupPropertiesConfigMap: "startup-properties"
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.licenseAgreement.accepted: "true"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+    teamcity.superUser.token: "token123"
   requests:
     cpu: "1000m"
     memory: "2500Mi"
