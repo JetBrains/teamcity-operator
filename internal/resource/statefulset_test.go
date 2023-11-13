@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -19,9 +20,9 @@ import (
 var _ = Describe("StatefulSet", func() {
 	var (
 		instance           v1alpha1.TeamCity
+		statefulSetBuilder *StatefulSetBuilder
 		scheme             *runtime.Scheme
 		builder            *TeamCityResourceBuilder
-		statefulSetBuilder *StatefulSetBuilder
 		TeamCityReplicas   = int32(0)
 
 		pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
@@ -55,9 +56,14 @@ var _ = Describe("StatefulSet", func() {
 		databaseSecret = v1alpha1.DatabaseSecret{
 			Secret: "database-secret",
 		}
+		startupConfig = map[string]string{
+			"foo":   "bar",
+			"hello": "world",
+		}
 	)
-	Describe("Build & Update", func() {
+	Context("TeamCity with minimal configuration", func() {
 		BeforeEach(func() {
+			statefulSetBuilder = builder.StatefulSet()
 			instance = v1alpha1.TeamCity{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      TeamCityName,
@@ -69,7 +75,6 @@ var _ = Describe("StatefulSet", func() {
 					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
 					Requests:               requests,
 					XmxPercentage:          xmxPercentage,
-					DatabaseSecret:         databaseSecret,
 				},
 			}
 			scheme = runtime.NewScheme()
@@ -80,6 +85,7 @@ var _ = Describe("StatefulSet", func() {
 				Scheme:   scheme,
 			}
 			statefulSetBuilder = builder.StatefulSet()
+
 		})
 		It("sets a name and namespace", func() {
 			obj, err := statefulSetBuilder.Build()
@@ -95,33 +101,6 @@ var _ = Describe("StatefulSet", func() {
 
 			labels := statefulSet.Spec.Selector.MatchLabels
 			Expect(labels["app.kubernetes.io/name"]).To(Equal(instance.Name))
-		})
-		It("creates the required PersistentVolumeClaims", func() {
-			obj, err := statefulSetBuilder.Build()
-			Expect(err).NotTo(HaveOccurred())
-			statefulSet := obj.(*v1.StatefulSet)
-
-			expected := []corev1.PersistentVolumeClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      pvcName,
-						Namespace: builder.Instance.Namespace,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         "jetbrains.com/v1alpha1",
-								Kind:               "TeamCity",
-								Name:               builder.Instance.GetName(),
-								UID:                builder.Instance.GetUID(),
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-							},
-						},
-					},
-					Spec: pvcSpec,
-				},
-			}
-			actual := statefulSet.Spec.VolumeClaimTemplates
-			Expect(actual).To(Equal(expected))
 		})
 		It("sets required resources requests for container", func() {
 			obj, err := statefulSetBuilder.Build()
@@ -183,6 +162,71 @@ var _ = Describe("StatefulSet", func() {
 			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
 			Expect(envVarsAreEqual).To(Equal(true))
 		})
+		It("sets the owner reference", func() {
+			statefulSet := &v1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      instance.Name,
+					Namespace: instance.Namespace,
+				},
+			}
+			Expect(statefulSetBuilder.Update(statefulSet)).To(Succeed())
+			Expect(len(statefulSet.OwnerReferences)).To(Equal(1))
+			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
+		})
+		It("creates the required PersistentVolumeClaims", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			expected := []corev1.PersistentVolumeClaim{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pvcName,
+						Namespace: builder.Instance.Namespace,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         "jetbrains.com/v1alpha1",
+								Kind:               "TeamCity",
+								Name:               builder.Instance.GetName(),
+								UID:                builder.Instance.GetUID(),
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: pvcSpec,
+				},
+			}
+			actual := statefulSet.Spec.VolumeClaimTemplates
+			Expect(actual).To(Equal(expected))
+		})
+	})
+	Context("TeamCity with database properties", func() {
+		BeforeEach(func() {
+			statefulSetBuilder = builder.StatefulSet()
+			instance = v1alpha1.TeamCity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      TeamCityName,
+					Namespace: TeamCityNamespace,
+				},
+				Spec: v1alpha1.TeamCitySpec{
+					Image:                  TeamCityImage,
+					Replicas:               &TeamCityReplicas,
+					PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
+					Requests:               requests,
+					DatabaseSecret:         databaseSecret,
+				},
+			}
+			scheme = runtime.NewScheme()
+			Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
+			builder = &TeamCityResourceBuilder{
+				Instance: &instance,
+				Scheme:   scheme,
+			}
+			statefulSetBuilder = builder.StatefulSet()
+
+		})
 		It("mounts database secret correctly", func() {
 			obj, err := statefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
@@ -206,21 +250,56 @@ var _ = Describe("StatefulSet", func() {
 
 			databaseSecretPathSplit := RemoveEmptyStrings(strings.Split(databaseSecretVolumeMount.MountPath, "/"))
 			Expect(databaseSecretPathSplit).To(Equal([]string{datadirPathClean, "config", TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}))
-
 		})
-		It("sets the owner reference", func() {
-			statefulSet := &v1.StatefulSet{
+	})
+	Context("TeamCity with startup properties", func() {
+		BeforeEach(func() {
+			statefulSetBuilder = builder.StatefulSet()
+			instance = v1alpha1.TeamCity{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      instance.Name,
-					Namespace: instance.Namespace,
+					Name:      TeamCityName,
+					Namespace: TeamCityNamespace,
+				},
+				Spec: v1alpha1.TeamCitySpec{
+					Image:                   TeamCityImage,
+					Replicas:                &TeamCityReplicas,
+					PersistentVolumeClaims:  []v1alpha1.CustomPersistentVolumeClaim{dataDirPvc},
+					Requests:                requests,
+					StartupPropertiesConfig: startupConfig,
 				},
 			}
-			Expect(statefulSetBuilder.Update(statefulSet)).To(Succeed())
-			Expect(len(statefulSet.OwnerReferences)).To(Equal(1))
-			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
-		})
+			scheme = runtime.NewScheme()
+			Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
+			builder = &TeamCityResourceBuilder{
+				Instance: &instance,
+				Scheme:   scheme,
+			}
+			statefulSetBuilder = builder.StatefulSet()
 
+		})
+		It("sets serveropts correctly", func() {
+			obj, err := statefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = statefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			containerEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			serverOptsEnvVarIndex := slices.IndexFunc(containerEnv, func(c corev1.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			serverOpts := containerEnv[serverOptsEnvVarIndex].Value
+			serverOptsSplit := strings.Fields(serverOpts)
+			startUpServerOpts := serverOptsSplit[len(serverOptsSplit)-len(startupConfig):] //get elements of the split that correspond to startup vars
+
+			i := 0
+			for k, v := range startupConfig {
+				expectedValue := fmt.Sprintf("-D%s=%s", k, v)
+				Expect(expectedValue).To(Equal(startUpServerOpts[i]))
+				i += 1
+			}
+		})
 	})
+
 })
 
 func RemoveEmptyStrings(s []string) []string {
