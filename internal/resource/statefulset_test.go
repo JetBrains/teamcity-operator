@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"strings"
@@ -40,8 +40,8 @@ var _ = Describe("StatefulSet", func() {
 			err = DefaultStatefulSetBuilder.Update(obj)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
-			expected := corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
+			expected := v12.ResourceRequirements{
+				Requests: v12.ResourceList{
 					"cpu":    builder.Instance.Spec.Requests["cpu"],
 					"memory": builder.Instance.Spec.Requests["memory"],
 				},
@@ -69,27 +69,27 @@ var _ = Describe("StatefulSet", func() {
 			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
 			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
 
-			dataPath := corev1.EnvVar{
+			dataPath := v12.EnvVar{
 				Name:  "TEAMCITY_DATA_PATH",
 				Value: datadirPath,
 			}
 
-			logsPath := corev1.EnvVar{
+			logsPath := v12.EnvVar{
 				Name:  "TEAMCITY_LOGS_PATH",
 				Value: fmt.Sprintf("%s/%s", datadirPath, "logs"),
 			}
 
-			memOpts := corev1.EnvVar{
+			memOpts := v12.EnvVar{
 				Name:  "TEAMCITY_SERVER_MEM_OPTS",
 				Value: fmt.Sprintf("%s%s", "-Xmx", xmxValue),
 			}
 
-			serverOpts := corev1.EnvVar{
+			serverOpts := v12.EnvVar{
 				Name: "TEAMCITY_SERVER_OPTS",
 				Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 					fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", datadirPath, "/memoryDumps/", TeamCityName) +
 					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", TeamCityName) + fmt.Sprintf(" -Dteamcity.server.rootURL=%s", TeamCityName)}
-			expected := append([]corev1.EnvVar{}, memOpts, dataPath, logsPath, serverOpts)
+			expected := append([]v12.EnvVar{}, memOpts, dataPath, logsPath, serverOpts)
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
 			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
 			Expect(envVarsAreEqual).To(Equal(true))
@@ -110,7 +110,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 
-			expected := []corev1.PersistentVolumeClaim{
+			expected := []v12.PersistentVolumeClaim{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      pvcName,
@@ -205,7 +205,7 @@ var _ = Describe("StatefulSet", func() {
 			statefulSet := obj.(*v1.StatefulSet)
 
 			containerEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-			serverOptsEnvVarIndex := slices.IndexFunc(containerEnv, func(c corev1.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			serverOptsEnvVarIndex := slices.IndexFunc(containerEnv, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
 			serverOpts := containerEnv[serverOptsEnvVarIndex].Value
 			serverOptsSplit := strings.Fields(serverOpts)
 			startupConfig := getStartupConfigurations()
