@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	defaultscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 )
 
 const (
@@ -53,14 +54,11 @@ var (
 		"cpu":    resource.MustParse("750m"),
 		"memory": resource.MustParse("1000Mi"),
 	}
-	xmxPercentage  = int64(95)
-	databaseSecret = v1alpha1.DatabaseSecret{
-		Secret: "database-secret",
-	}
+	xmxPercentage = int64(95)
 )
 
 func BeforeEachBuild(modify ResourceModifier) {
-	Instance = GetBaseTcInstance()
+	Instance = getBaseTcInstance()
 	scheme = runtime.NewScheme()
 
 	Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
@@ -75,23 +73,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultStatefulSetBuilder = builder.StatefulSet()
 }
 
-func BeforeEachUpdate(modify ResourceModifier) {
-	Instance = GetBaseTcInstance()
-	scheme = runtime.NewScheme()
-
-	Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
-	Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
-
-	modify(&Instance)
-
-	builder = &TeamCityResourceBuilder{
-		Instance: &Instance,
-		Scheme:   scheme,
-	}
-	DefaultStatefulSetBuilder = builder.StatefulSet()
-}
-
-func GetBaseTcInstance() v1alpha1.TeamCity {
+func getBaseTcInstance() v1alpha1.TeamCity {
 	return v1alpha1.TeamCity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TeamCityName,
@@ -103,7 +85,43 @@ func GetBaseTcInstance() v1alpha1.TeamCity {
 			PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
 			Requests:               requests,
 			XmxPercentage:          xmxPercentage,
-			DatabaseSecret:         databaseSecret,
+		},
+	}
+}
+
+func getStartupConfigurations() map[string]string {
+	return map[string]string{
+		"foo":   "bar",
+		"hello": "world",
+	}
+}
+
+func getDatabaseSecret() v1alpha1.DatabaseSecret {
+	return v1alpha1.DatabaseSecret{
+		Secret: "database-secret",
+	}
+}
+
+func getInitContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			Name:  "volume-permissions",
+			Image: "busybox",
+			Command: []string{
+				"sh",
+				"-c",
+				"chown -R 1000:1000 /storage",
+			},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsNonRoot: pointer.Bool(false),
+				RunAsUser:    pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "teamcity-node-volume1",
+					MountPath: "/storage",
+				},
+			},
 		},
 	}
 }
