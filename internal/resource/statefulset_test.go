@@ -291,12 +291,15 @@ var _ = Describe("StatefulSet", func() {
 			serverOptsSplit := strings.Fields(serverOpts)
 			startUpServerOpts := serverOptsSplit[len(serverOptsSplit)-len(startupConfig):] //get elements of the split that correspond to startup vars
 
+			keys := SortKeysAlphabeticallyInMap(startupConfig)
 			i := 0
-			for k, v := range startupConfig {
-				expectedValue := fmt.Sprintf("-D%s=%s", k, v)
+
+			for _, k := range keys {
+				expectedValue := fmt.Sprintf("-D%s=%s", k, startupConfig[k])
 				Expect(expectedValue).To(Equal(startUpServerOpts[i]))
 				i += 1
 			}
+
 		})
 	})
 
