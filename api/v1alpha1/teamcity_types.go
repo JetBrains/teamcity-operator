@@ -61,7 +61,7 @@ type TeamCitySpec struct {
 	// +kubebuilder:default:={}
 	DatabaseSecret DatabaseSecret `json:"databaseSecret,omitempty"`
 	// +kubebuilder:default:={}
-	StartupPropertiesConfig map[string]string `json:"startupPropertiesConfig"`
+	StartupPropertiesConfig map[string]string `json:"startupPropertiesConfig,omitempty"`
 }
 
 type DatabaseSecret struct {

@@ -2335,7 +2335,6 @@ spec:
             - podSecurityContext
             - replicas
             - requests
-            - startupPropertiesConfig
             - xmxPercentage
             type: object
           status:
