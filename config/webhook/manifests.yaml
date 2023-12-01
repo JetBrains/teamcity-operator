@@ -1,0 +1,94 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-jetbrains-com-v1beta1-teamcity
+  failurePolicy: Fail
+  name: mteamcity.kb.io
+  rules:
+  - apiGroups:
+    - jetbrains.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - teamcities
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-jetbrains-com-v1alpha1-teamcity
+  failurePolicy: Fail
+  name: mteamcity.kb.io
+  rules:
+  - apiGroups:
+    - jetbrains.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - teamcities
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-jetbrains-com-v1beta1-teamcity
+  failurePolicy: Fail
+  name: vteamcity.kb.io
+  rules:
+  - apiGroups:
+    - jetbrains.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - teamcities
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-jetbrains-com-v1alpha1-teamcity
+  failurePolicy: Fail
+  name: vteamcity.kb.io
+  rules:
+  - apiGroups:
+    - jetbrains.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - teamcities
+  sideEffects: None
