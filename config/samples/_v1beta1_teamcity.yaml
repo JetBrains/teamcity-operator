@@ -1,0 +1,42 @@
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  labels:
+    app.kubernetes.io/name: teamcity
+    app.kubernetes.io/instance: teamcity-sample
+    app.kubernetes.io/part-of: teamcity-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: teamcity-operator
+  name: teamcity-sample-beta
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  replicas: 1
+  env:
+    AWS_DEFAULT_REGION: "eu-west-1"
+  requests:
+    cpu: "1000m"
+    memory: "2500Mi"
+  persistentVolumeClaims:
+    - name: teamcity-node-volume1
+      volumeMount:
+        name: teamcity-node-volume1
+        mountPath: /storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - name: teamcity-node-config-dir
+      volumeMount:
+        name: teamcity-node-config-dir
+        mountPath: /storage/config
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

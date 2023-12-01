@@ -16,7 +16,23 @@ resources:
     namespaced: true
   controller: true
   domain: jetbrains.com
-  kind: Teamcity
+  kind: TeamCity
   path: git.jetbrains.team/tch/teamcity-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: jetbrains.com
+  kind: TeamCity
+  path: git.jetbrains.team/tch/teamcity-operator/api/v1beta1
+  version: v1beta1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 version: "3"
