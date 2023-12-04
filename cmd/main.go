@@ -99,6 +99,10 @@ func main() {
 		os.Exit(1)
 	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if certDirPath, present := os.LookupEnv("CERT_DIR_PATH"); present && certDirPath != "" {
+			whs := mgr.GetWebhookServer()
+			whs.CertDir = certDirPath
+		}
 		if err = (&jetbrainscomv1alpha1.TeamCity{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "TeamCity")
 			os.Exit(1)
