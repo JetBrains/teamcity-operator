@@ -65,6 +65,8 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+CA_ROOT:=$(shell cat certs/rootCA.pem | base64)
+
 .PHONY: all
 all: build
 
@@ -156,6 +158,10 @@ endif
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+
+.PHONY: install-local
+install-local: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	export CA_BUNDLE=$(CA_ROOT) && $(KUSTOMIZE) build config/local | envsubst | kubectl apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
@@ -264,3 +270,11 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+#.PHONY: generate-certs
+#generate-certs: ## Generates the certs required to run webhooks locally
+#	mkdir -p certs
+#	export CAROOT=$(pwd)/certs
+#	mkcert -install
+#	mkcert -cert-file=$CAROOT/tls.crt -key-file=$CAROOT/tls.key host.docker.internal 172.17.0.1 host.minikube.internal
+

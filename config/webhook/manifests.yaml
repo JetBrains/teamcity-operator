@@ -13,7 +13,7 @@ webhooks:
       namespace: system
       path: /mutate-jetbrains-com-v1beta1-teamcity
   failurePolicy: Fail
-  name: mteamcity.kb.io
+  name: mv1beta1teamcity.kb.io
   rules:
   - apiGroups:
     - jetbrains.com
@@ -33,7 +33,7 @@ webhooks:
       namespace: system
       path: /mutate-jetbrains-com-v1alpha1-teamcity
   failurePolicy: Fail
-  name: mteamcity.kb.io
+  name: mv1alpha1teamcity.kb.io
   rules:
   - apiGroups:
     - jetbrains.com
@@ -60,7 +60,7 @@ webhooks:
       namespace: system
       path: /validate-jetbrains-com-v1beta1-teamcity
   failurePolicy: Fail
-  name: vteamcity.kb.io
+  name: vv1beta1teamcity.kb.io
   rules:
   - apiGroups:
     - jetbrains.com
@@ -80,7 +80,7 @@ webhooks:
       namespace: system
       path: /validate-jetbrains-com-v1alpha1-teamcity
   failurePolicy: Fail
-  name: vteamcity.kb.io
+  name: vv1alpha1teamcity.kb.io
   rules:
   - apiGroups:
     - jetbrains.com

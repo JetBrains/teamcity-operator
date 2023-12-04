@@ -34,7 +34,7 @@ func (r *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-//+kubebuilder:webhook:path=/mutate-jetbrains-com-v1beta1-teamcity,mutating=true,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=mteamcity.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-jetbrains-com-v1beta1-teamcity,mutating=true,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=mv1beta1teamcity.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &TeamCity{}
 
@@ -46,7 +46,7 @@ func (r *TeamCity) Default() {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-jetbrains-com-v1beta1-teamcity,mutating=false,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=vteamcity.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-jetbrains-com-v1beta1-teamcity,mutating=false,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=vv1beta1teamcity.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &TeamCity{}
 

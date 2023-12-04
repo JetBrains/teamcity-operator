@@ -1,0 +1,9 @@
+---
+- op: replace
+  path: /spec/conversion/webhook/clientConfig
+  value:
+    caBundle: ${CA_BUNDLE}
+    # same as above, replace host.docker.internal if on Linux
+    url: https://host.minikube.internal:9443/convert
+- op: remove
+  path: /metadata/annotations/cert-manager.io~1inject-ca-from
