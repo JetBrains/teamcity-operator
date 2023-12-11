@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	v1beta1 "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
@@ -14,7 +14,7 @@ func (src *TeamCity) ConvertTo(dstRaw conversion.Hub) error {
 	dataDir := src.Spec.PersistentVolumeClaims[dataDirIndex]
 	dst.Spec.DataDirVolumeClaim = v1beta1.CustomPersistentVolumeClaim(dataDir)
 	//remove data dir from list of pvcs
-	trimmedPersistentVolumeClaims := append(src.Spec.PersistentVolumeClaims[:dataDirIndex], src.Spec.PersistentVolumeClaims[dataDirIndex:]...)
+	trimmedPersistentVolumeClaims := src.Spec.PersistentVolumeClaims[dataDirIndex+1:]
 	//add other elements into a new type
 	var newPersistentVolumeClaimList []v1beta1.CustomPersistentVolumeClaim
 	for _, element := range trimmedPersistentVolumeClaims {
@@ -30,6 +30,7 @@ func (src *TeamCity) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.Env = src.Spec.Env
 	dst.Spec.Image = src.Spec.Image
 	dst.Spec.Requests = src.Spec.Requests
+	dst.Spec.Replicas = src.Spec.Replicas
 	dst.Spec.Limits = src.Spec.Limits
 	dst.Spec.TeamCityServerPort = src.Spec.TeamCityServerPort
 	dst.Spec.PodSecurityContext = src.Spec.PodSecurityContext
@@ -67,6 +68,7 @@ func (dst *TeamCity) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.Spec.Env = src.Spec.Env
 	dst.Spec.Image = src.Spec.Image
 	dst.Spec.Requests = src.Spec.Requests
+	dst.Spec.Replicas = src.Spec.Replicas
 	dst.Spec.Limits = src.Spec.Limits
 	dst.Spec.TeamCityServerPort = src.Spec.TeamCityServerPort
 	dst.Spec.PodSecurityContext = src.Spec.PodSecurityContext
