@@ -37,6 +37,7 @@ func (src *TeamCity) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.XmxPercentage = src.Spec.XmxPercentage
 
 	dst.Spec.HealthEndpoint = src.Spec.HealthEndpoint
+	dst.Spec.ReadinessEndpoint = src.Spec.ReadinessEndpoint
 	dst.Spec.ReadinessProbeSettings = src.Spec.ReadinessProbeSettings
 	dst.Spec.LivenessProbeSettings = src.Spec.LivenessProbeSettings
 	dst.Spec.StartupProbeSettings = src.Spec.StartupProbeSettings
@@ -61,6 +62,7 @@ func (dst *TeamCity) ConvertFrom(srcRaw conversion.Hub) error {
 	for _, elem := range src.Spec.PersistentVolumeClaims {
 		persistentVolumeClaimList = append(persistentVolumeClaimList, CustomPersistentVolumeClaim(elem))
 	}
+	dst.Spec.PersistentVolumeClaims = persistentVolumeClaimList
 	//object meta
 	dst.ObjectMeta = src.ObjectMeta
 
@@ -75,6 +77,7 @@ func (dst *TeamCity) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.Spec.XmxPercentage = src.Spec.XmxPercentage
 
 	dst.Spec.HealthEndpoint = src.Spec.HealthEndpoint
+	dst.Spec.ReadinessEndpoint = src.Spec.ReadinessEndpoint
 	dst.Spec.ReadinessProbeSettings = src.Spec.ReadinessProbeSettings
 	dst.Spec.LivenessProbeSettings = src.Spec.LivenessProbeSettings
 	dst.Spec.StartupProbeSettings = src.Spec.StartupProbeSettings
@@ -84,6 +87,5 @@ func (dst *TeamCity) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.Spec.DatabaseSecret = DatabaseSecret(src.Spec.DatabaseSecret)
 
 	dst.Status = TeamCityStatus(src.Status)
-
 	return nil
 }
