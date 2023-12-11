@@ -105,6 +105,18 @@ type TeamCityList struct {
 	Items           []TeamCity `json:"items"`
 }
 
+func (instance *TeamCity) StartUpPropertiesConfigProvided() bool {
+	return len(instance.Spec.StartupPropertiesConfig) != 0
+}
+
+func (instance *TeamCity) DatabaseSecretProvided() bool {
+	return instance.Spec.DatabaseSecret.Secret != ""
+}
+
+func (instance *TeamCity) DataDirPath() string {
+	return instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+}
+
 func init() {
 	SchemeBuilder.Register(&TeamCity{}, &TeamCityList{})
 }

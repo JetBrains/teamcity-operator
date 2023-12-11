@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,10 +17,10 @@ const (
 	TeamCityImage     = "jetbrains/teamcity-server:latest"
 )
 
-type ResourceModifier func(*v1alpha1.TeamCity)
+type ResourceModifier func(*v1beta1.TeamCity)
 
 var (
-	Instance                  v1alpha1.TeamCity
+	Instance                  v1beta1.TeamCity
 	DefaultStatefulSetBuilder *StatefulSetBuilder
 
 	scheme           *runtime.Scheme
@@ -42,7 +42,7 @@ var (
 		VolumeMode:       &pvcVolumeMode,
 		Resources:        pvcResources,
 	}
-	pvc = v1alpha1.CustomPersistentVolumeClaim{
+	pvc = v1beta1.CustomPersistentVolumeClaim{
 		Name: pvcName,
 		Spec: pvcSpec,
 		VolumeMount: corev1.VolumeMount{
@@ -61,7 +61,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	Instance = getBaseTcInstance()
 	scheme = runtime.NewScheme()
 
-	Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(v1beta1.AddToScheme(scheme)).To(Succeed())
 	Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
 
 	modify(&Instance)
@@ -73,16 +73,16 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultStatefulSetBuilder = builder.StatefulSet()
 }
 
-func getBaseTcInstance() v1alpha1.TeamCity {
-	return v1alpha1.TeamCity{
+func getBaseTcInstance() v1beta1.TeamCity {
+	return v1beta1.TeamCity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TeamCityName,
 			Namespace: TeamCityNamespace,
 		},
-		Spec: v1alpha1.TeamCitySpec{
+		Spec: v1beta1.TeamCitySpec{
 			Image:                  TeamCityImage,
 			Replicas:               &teamCityReplicas,
-			PersistentVolumeClaims: []v1alpha1.CustomPersistentVolumeClaim{pvc},
+			PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{pvc},
 			Requests:               requests,
 			XmxPercentage:          xmxPercentage,
 		},
@@ -96,8 +96,8 @@ func getStartupConfigurations() map[string]string {
 	}
 }
 
-func getDatabaseSecret() v1alpha1.DatabaseSecret {
-	return v1alpha1.DatabaseSecret{
+func getDatabaseSecret() v1beta1.DatabaseSecret {
+	return v1beta1.DatabaseSecret{
 		Secret: "database-secret",
 	}
 }

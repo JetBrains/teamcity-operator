@@ -2,13 +2,11 @@ package resource
 
 import (
 	"fmt"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -32,7 +30,7 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+	pvcList, err := builder.persistentVolumeClaimTemplatesBuilder()
 
 	if err != nil {
 		return nil, err
@@ -60,17 +58,15 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 }
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
-	var dataDirVolumeMount v12.VolumeMount
 	var volumes []v12.Volume
 	var extraServerOpts string
 	var extraEnvVars = make(map[string]string)
 
 	statefulSet := object.(*v1.StatefulSet)
 
-	volumeMounts := volumeMountsBuilder(builder.Instance)
+	volumeMounts := builder.volumeMountsBuilder()
 
-	dataDirVolumeMount, _ = builder.defineTeamCityDirectories(volumeMounts)
-	dataDirPath := dataDirVolumeMount.MountPath
+	dataDirPath := builder.Instance.DataDirPath()
 
 	initContainers := builder.Instance.Spec.InitContainers
 
@@ -107,17 +103,19 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	return nil
 }
 
-func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *runtime.Scheme) ([]v12.PersistentVolumeClaim, error) {
+func (builder *StatefulSetBuilder) persistentVolumeClaimTemplatesBuilder() ([]v12.PersistentVolumeClaim, error) {
 	var pvcList []v12.PersistentVolumeClaim
-	for _, claim := range instance.Spec.PersistentVolumeClaims {
+	claims := builder.Instance.Spec.PersistentVolumeClaims
+	claims = append(claims, builder.Instance.Spec.DataDirVolumeClaim)
+	for _, claim := range claims {
 		pvc := v12.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      claim.Name,
-				Namespace: instance.Namespace,
+				Namespace: builder.Instance.Namespace,
 			},
 			Spec: claim.Spec,
 		}
-		if err := controllerutil.SetControllerReference(instance, &pvc, scheme); err != nil {
+		if err := controllerutil.SetControllerReference(builder.Instance, &pvc, builder.Scheme); err != nil {
 			return []v12.PersistentVolumeClaim{}, fmt.Errorf("failed setting controller reference: %w", err)
 		}
 		pvcList = append(pvcList, pvc)
@@ -217,8 +215,9 @@ func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults ma
 	return
 }
 
-func volumeMountsBuilder(instance *v1alpha1.TeamCity) (volumeMounts []v12.VolumeMount) {
-	for _, claim := range instance.Spec.PersistentVolumeClaims {
+func (builder *StatefulSetBuilder) volumeMountsBuilder() (volumeMounts []v12.VolumeMount) {
+	volumeMounts = append(volumeMounts, v12.VolumeMount{Name: builder.Instance.Spec.DataDirVolumeClaim.Name, MountPath: builder.Instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath})
+	for _, claim := range builder.Instance.Spec.PersistentVolumeClaims {
 		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: claim.VolumeMount.Name, MountPath: claim.VolumeMount.MountPath})
 	}
 	return
@@ -244,16 +243,4 @@ func (builder *StatefulSetBuilder) convertStartUpPropertiesToServerOptions() (re
 		res += fmt.Sprintf(" -D%s=%s", k, builder.Instance.Spec.StartupPropertiesConfig[k])
 	}
 	return
-}
-
-func (builder *StatefulSetBuilder) defineTeamCityDirectories(mounts []v12.VolumeMount) (dataDir v12.VolumeMount, configDir v12.VolumeMount) {
-	if len(mounts) > 0 {
-		dataDir = mounts[0]
-	}
-	if len(mounts) > 1 {
-		configDir = mounts[1]
-	} else {
-		configDir = dataDir
-	}
-	return dataDir, configDir
 }

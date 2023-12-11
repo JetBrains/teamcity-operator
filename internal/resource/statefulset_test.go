@@ -2,7 +2,7 @@ package resource
 
 import (
 	"fmt"
-	v1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ import (
 var _ = Describe("StatefulSet", func() {
 	Context("TeamCity with minimal configuration", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1alpha1.TeamCity) {})
+			BeforeEachBuild(func(teamcity *TeamCity) {})
 		})
 		It("sets a name and namespace", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
@@ -67,7 +67,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
-			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
+			datadirPath := Instance.DataDirPath()
 
 			dataPath := v12.EnvVar{
 				Name:  "TEAMCITY_DATA_PATH",
@@ -135,7 +135,7 @@ var _ = Describe("StatefulSet", func() {
 	})
 	Context("TeamCity with init containers", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1alpha1.TeamCity) {
+			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.InitContainers = getInitContainers()
 			})
 		})
@@ -161,7 +161,7 @@ var _ = Describe("StatefulSet", func() {
 	})
 	Context("TeamCity with database properties", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1alpha1.TeamCity) {
+			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.DatabaseSecret = getDatabaseSecret()
 			})
 
@@ -184,7 +184,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(volumeMounts)).To(Equal(2))
 
 			databaseSecretVolumeMount := volumeMounts[1]
-			datadirPath := volumeMountsBuilder(builder.Instance)[0].MountPath
+			datadirPath := Instance.DataDirPath()
 			datadirPathClean := strings.Replace(datadirPath, "/", "", -1)
 
 			databaseSecretPathSplit := RemoveEmptyStrings(strings.Split(databaseSecretVolumeMount.MountPath, "/"))
@@ -193,7 +193,7 @@ var _ = Describe("StatefulSet", func() {
 	})
 	Context("TeamCity with startup properties", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1alpha1.TeamCity) {
+			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.StartupPropertiesConfig = getStartupConfigurations()
 			})
 		})

@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
@@ -16,7 +16,7 @@ func GetSecretE(r *TeamcityReconciler, ctx context.Context, secretName string, n
 	return secret, nil
 }
 
-func GetTeamCityObjectE(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (teamcity jetbrainscomv1alpha1.TeamCity, err error) {
+func GetTeamCityObjectE(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (teamcity TeamCity, err error) {
 	if err := r.Get(ctx, namespacedName, &teamcity); err != nil {
 		return teamcity, err
 	}
@@ -24,11 +24,11 @@ func GetTeamCityObjectE(r *TeamcityReconciler, ctx context.Context, namespacedNa
 }
 
 func UpdateTeamCityObjectStatusE(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName, state string, status string) (err error) {
-	var teamcity jetbrainscomv1alpha1.TeamCity
+	var teamcity TeamCity
 	if teamcity, err = GetTeamCityObjectE(r, ctx, namespacedName); err != nil {
 		return err
 	}
-	teamcityStatus := jetbrainscomv1alpha1.TeamCityStatus{State: state, Message: status}
+	teamcityStatus := TeamCityStatus{State: state, Message: status}
 	if !reflect.DeepEqual(teamcity.Status, teamcityStatus) {
 		teamcity.Status = teamcityStatus
 		err = r.Status().Update(context.Background(), &teamcity)
