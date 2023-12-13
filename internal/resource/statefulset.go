@@ -2,6 +2,7 @@ package resource
 
 import (
 	"fmt"
+	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
@@ -105,8 +106,11 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 
 func (builder *StatefulSetBuilder) persistentVolumeClaimTemplatesBuilder() ([]v12.PersistentVolumeClaim, error) {
 	var pvcList []v12.PersistentVolumeClaim
-	claims := builder.Instance.Spec.PersistentVolumeClaims
-	claims = append(claims, builder.Instance.Spec.DataDirVolumeClaim)
+	dataDirClaim := builder.Instance.Spec.DataDirVolumeClaim
+	claims := []v1beta1.CustomPersistentVolumeClaim{dataDirClaim}
+	if builder.Instance.Spec.PersistentVolumeClaims != nil {
+		claims = append(claims, builder.Instance.Spec.PersistentVolumeClaims...)
+	}
 	for _, claim := range claims {
 		pvc := v12.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
