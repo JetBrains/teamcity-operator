@@ -27,24 +27,24 @@ var (
 	builder          *TeamCityResourceBuilder
 	teamCityReplicas = int32(0)
 
-	pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
-	pvcStorageClassName = "standard"
-	pvcVolumeMode       = corev1.PersistentVolumeFilesystem
-	pvcResources        = corev1.ResourceRequirements{
+	dataDirPVCAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
+	dataDirPVCStorageClassName = "standard"
+	dataDirPVCVolumeMode       = corev1.PersistentVolumeFilesystem
+	dataDirPVCResources        = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceStorage: resource.MustParse("1Gi"),
 		},
 	}
-	pvcName = "test-pvc"
-	pvcSpec = corev1.PersistentVolumeClaimSpec{
-		AccessModes:      pvcAccessMode,
-		StorageClassName: &pvcStorageClassName,
-		VolumeMode:       &pvcVolumeMode,
-		Resources:        pvcResources,
+	dataDirPVCName = "data-dir"
+	dataDirPVCSpec = corev1.PersistentVolumeClaimSpec{
+		AccessModes:      dataDirPVCAccessMode,
+		StorageClassName: &dataDirPVCStorageClassName,
+		VolumeMode:       &dataDirPVCVolumeMode,
+		Resources:        dataDirPVCResources,
 	}
-	pvc = v1beta1.CustomPersistentVolumeClaim{
-		Name: pvcName,
-		Spec: pvcSpec,
+	dataDirPVC = v1beta1.CustomPersistentVolumeClaim{
+		Name: dataDirPVCName,
+		Spec: dataDirPVCSpec,
 		VolumeMount: corev1.VolumeMount{
 			Name:      "default-storage",
 			MountPath: "/storage",
@@ -80,11 +80,11 @@ func getBaseTcInstance() v1beta1.TeamCity {
 			Namespace: TeamCityNamespace,
 		},
 		Spec: v1beta1.TeamCitySpec{
-			Image:                  TeamCityImage,
-			Replicas:               &teamCityReplicas,
-			PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{pvc},
-			Requests:               requests,
-			XmxPercentage:          xmxPercentage,
+			Image:              TeamCityImage,
+			Replicas:           &teamCityReplicas,
+			DataDirVolumeClaim: dataDirPVC,
+			Requests:           requests,
+			XmxPercentage:      xmxPercentage,
 		},
 	}
 }
@@ -124,4 +124,21 @@ func getInitContainers() []corev1.Container {
 			},
 		},
 	}
+}
+
+func getAdditionalPVC() v1beta1.CustomPersistentVolumeClaim {
+	return v1beta1.CustomPersistentVolumeClaim{
+		Name: "some-additional-data",
+		VolumeMount: corev1.VolumeMount{
+			Name:      "plugin-data",
+			MountPath: "/storage/plugins",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteMany"},
+			Resources:        corev1.ResourceRequirements{},
+			StorageClassName: pointer.String("standard"),
+			VolumeMode:       &dataDirPVCVolumeMode,
+		},
+	}
+
 }

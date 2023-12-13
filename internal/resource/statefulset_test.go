@@ -105,7 +105,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(statefulSet.OwnerReferences)).To(Equal(1))
 			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
 		})
-		It("creates the required PersistentVolumeClaims", func() {
+		It("creates data dir PVC", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
@@ -113,11 +113,11 @@ var _ = Describe("StatefulSet", func() {
 			expected := []v12.PersistentVolumeClaim{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      pvcName,
+						Name:      dataDirPVCName,
 						Namespace: builder.Instance.Namespace,
 						OwnerReferences: []metav1.OwnerReference{
 							{
-								APIVersion:         "jetbrains.com/v1alpha1",
+								APIVersion:         "jetbrains.com/v1beta1",
 								Kind:               "TeamCity",
 								Name:               builder.Instance.GetName(),
 								UID:                builder.Instance.GetUID(),
@@ -126,7 +126,7 @@ var _ = Describe("StatefulSet", func() {
 							},
 						},
 					},
-					Spec: pvcSpec,
+					Spec: dataDirPVCSpec,
 				},
 			}
 			actual := statefulSet.Spec.VolumeClaimTemplates
@@ -219,6 +219,26 @@ var _ = Describe("StatefulSet", func() {
 				Expect(expectedValue).To(Equal(startUpServerOpts[i]))
 				i += 1
 			}
+
+		})
+	})
+	Context("TeamCity with additional mounts", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{getAdditionalPVC()}
+			})
+		})
+		It("sets additional pvc correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			volumeClaimTemplates := statefulSet.Spec.VolumeClaimTemplates
+			Expect(len(volumeClaimTemplates)).To(Equal(2))
+			additionalPVC := volumeClaimTemplates[1] // index 0 is reserved for data dir
+			Expect(additionalPVC.Name).To(Not(Equal(dataDirPVCName)))
 
 		})
 	})
