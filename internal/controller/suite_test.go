@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	jetbrainscomv1beta1 "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"k8s.io/client-go/kubernetes"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -70,7 +69,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = jetbrainscomv1alpha1.AddToScheme(scheme.Scheme)
+	err = jetbrainscomv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
