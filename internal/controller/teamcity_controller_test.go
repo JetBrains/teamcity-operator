@@ -62,11 +62,11 @@ var _ = Describe("TeamCity controller", func() {
 					Namespace: TeamCityNamespace,
 				},
 				Spec: v1beta1.TeamCitySpec{
-					Image:                  TeamCityImage,
-					Replicas:               &TeamCityReplicas,
-					Requests:               requests,
-					PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{pvc},
-					InitContainers:         getInitContainers(),
+					Image:              TeamCityImage,
+					Replicas:           &TeamCityReplicas,
+					Requests:           requests,
+					DataDirVolumeClaim: pvc,
+					InitContainers:     getInitContainers(),
 				},
 			}
 			Expect(k8sClient.Create(ctx, teamcity)).To(Succeed())
@@ -173,7 +173,8 @@ var _ = Describe("TeamCity controller", func() {
 				},
 				Spec: v1beta1.TeamCitySpec{
 					Image:                  TeamCityImage,
-					PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{dataDirPVC, configDirPVC},
+					DataDirVolumeClaim:     dataDirPVC,
+					PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{configDirPVC},
 					Replicas:               &TeamCityReplicas,
 					Requests:               requests,
 					DatabaseSecret:         databaseSecret,
