@@ -4,9 +4,11 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	defaultscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
 )
@@ -22,6 +24,8 @@ type ResourceModifier func(*v1alpha1.TeamCity)
 var (
 	Instance                  v1alpha1.TeamCity
 	DefaultStatefulSetBuilder *StatefulSetBuilder
+	DefaultServiceBuilder     *ServiceBuilder
+	DefaultIngressBuilder     *IngressBuilder
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -54,7 +58,13 @@ var (
 		"cpu":    resource.MustParse("750m"),
 		"memory": resource.MustParse("1000Mi"),
 	}
-	xmxPercentage = int64(95)
+	xmxPercentage        = int64(95)
+	serviceNameMain      = TeamCityName + "-service-main"
+	serviceNameSecondary = TeamCityName + "-service-secondary"
+	servicePort          = int32(8111)
+
+	ingressNameFirst     = TeamCityName + "-ingress-first"
+	ingressNameSecondary = TeamCityName + "-ingress-secondary"
 )
 
 func BeforeEachBuild(modify ResourceModifier) {
@@ -71,6 +81,8 @@ func BeforeEachBuild(modify ResourceModifier) {
 		Scheme:   scheme,
 	}
 	DefaultStatefulSetBuilder = builder.StatefulSet()
+	DefaultServiceBuilder = builder.Service()
+	DefaultIngressBuilder = builder.Ingress()
 }
 
 func getBaseTcInstance() v1alpha1.TeamCity {
@@ -120,6 +132,91 @@ func getInitContainers() []corev1.Container {
 				{
 					Name:      "teamcity-node-volume1",
 					MountPath: "/storage",
+				},
+			},
+		},
+	}
+}
+
+func getServiceList() []v1alpha1.Service {
+	return []v1alpha1.Service{
+		{
+			Name: serviceNameMain,
+			Annotations: map[string]string{
+				"role": "tc-main",
+			},
+			ServiceSpec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{Port: servicePort, TargetPort: intstr.FromInt32(8111)},
+				},
+				Selector: map[string]string{
+					"app.kubernetes.io/name": TeamCityName,
+				},
+			},
+		},
+		{
+			Name: serviceNameSecondary,
+			Annotations: map[string]string{
+				"role": "tc-secondary",
+			},
+			ServiceSpec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{Port: servicePort, TargetPort: intstr.FromInt32(8111)},
+				},
+				Selector: map[string]string{
+					"app.kubernetes.io/name": TeamCityName,
+				},
+			},
+		},
+	}
+}
+
+func getIngressList() []v1alpha1.Ingress {
+	ingressClassName := "nginx"
+	ingressServiceBackend := netv1.IngressServiceBackend{
+		Name: serviceNameMain,
+		Port: netv1.ServiceBackendPort{
+			Number: servicePort,
+		},
+	}
+	ingressHttpRuleValue := netv1.HTTPIngressRuleValue{
+		Paths: []netv1.HTTPIngressPath{
+			{
+				Backend: netv1.IngressBackend{Service: &ingressServiceBackend},
+			},
+		},
+	}
+	ingressRuleValue := netv1.IngressRuleValue{
+		HTTP: &ingressHttpRuleValue,
+	}
+	return []v1alpha1.Ingress{
+		{
+			Name: ingressNameFirst,
+			Annotations: map[string]string{
+				"role": "tc-main",
+			},
+			IngressSpec: netv1.IngressSpec{
+				IngressClassName: &ingressClassName,
+				Rules: []netv1.IngressRule{
+					{
+						Host:             TeamCityName + ".myteamcity.com",
+						IngressRuleValue: ingressRuleValue,
+					},
+				},
+			},
+		},
+		{
+			Name: ingressNameSecondary,
+			Annotations: map[string]string{
+				"role": "tc-secondary",
+			},
+			IngressSpec: netv1.IngressSpec{
+				IngressClassName: &ingressClassName,
+				Rules: []netv1.IngressRule{
+					{
+						Host:             TeamCityName + "-secondary.myteamcity.com",
+						IngressRuleValue: ingressRuleValue,
+					},
 				},
 			},
 		},

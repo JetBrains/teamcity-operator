@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"context"
 	"fmt"
 	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
@@ -29,6 +30,36 @@ func (builder *TeamCityResourceBuilder) StatefulSet() *StatefulSetBuilder {
 
 func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 	return true
+}
+
+func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
+	pvcList, err := persistentVolumeClaimTemplatesBuild(builder.Instance, builder.Scheme)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return []client.Object{
+		&v1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      builder.Instance.Name,
+				Namespace: builder.Instance.Namespace,
+			},
+			Spec: v1.StatefulSetSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: metadata.LabelSelector(builder.Instance.Name),
+				},
+
+				VolumeClaimTemplates: pvcList,
+				Template: v12.PodTemplateSpec{
+					Spec: v12.PodSpec{
+						InitContainers: []v12.Container{},
+						Containers:     []v12.Container{},
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
@@ -105,6 +136,10 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 		return fmt.Errorf("failed setting controller reference: %w", err)
 	}
 	return nil
+}
+
+func (builder *StatefulSetBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
+	return []client.Object{}, nil
 }
 
 func persistentVolumeClaimTemplatesBuild(instance *v1alpha1.TeamCity, scheme *runtime.Scheme) ([]v12.PersistentVolumeClaim, error) {

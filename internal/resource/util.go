@@ -1,6 +1,8 @@
 package resource
 
-import "sort"
+import (
+	"sort"
+)
 
 func SortKeysAlphabeticallyInMap(input map[string]string) []string {
 	s := make([]string, 0, len(input))

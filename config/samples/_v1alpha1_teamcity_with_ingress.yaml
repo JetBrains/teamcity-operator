@@ -1,0 +1,69 @@
+apiVersion: jetbrains.com/v1alpha1
+kind: TeamCity
+metadata:
+  labels:
+    app.kubernetes.io/name: teamcity
+    app.kubernetes.io/instance: teamcity-sample
+    app.kubernetes.io/part-of: teamcity-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: teamcity-operator
+  name: teamcity-sample
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  replicas: 1
+  env:
+    AWS_DEFAULT_REGION: "eu-west-1"
+  requests:
+    cpu: "1000m"
+    memory: "2500Mi"
+  persistentVolumeClaims:
+    - name: teamcity-node-volume1
+      volumeMount:
+        name: teamcity-node-volume1
+        mountPath: /storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - name: teamcity-node-config-dir
+      volumeMount:
+        name: teamcity-node-config-dir
+        mountPath: /storage/config
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  serviceList:
+    - name: tc-sample
+      spec:
+        selector:
+          app.kubernetes.io/name: teamcity-sample
+          app.kubernetes.io/component: teamcity
+          app.kubernetes.io/part-of: teamcity
+        ports:
+          - protocol: TCP
+            port: 8111
+            targetPort: 8111
+        clusterIP: None
+  ingressList:
+  - name: tc-ingress
+    annotations: {}
+    spec:
+      ingressClassName: nginx
+      rules:
+        - host: tc-sample.myteamcity.com
+          http:
+            paths:
+              - backend:
+                  service:
+                    name: tc-sample
+                    port:
+                      number: 8111
+                pathType: ImplementationSpecific

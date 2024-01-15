@@ -26,6 +26,7 @@ import (
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -90,18 +91,11 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	resourceBuilder := resource.TeamCityResourceBuilder{
 		Instance: &teamcity,
 		Scheme:   r.Scheme,
+		Client:   r.Client,
 	}
 	builders := resourceBuilder.ResourceBuilders()
 
 	for _, builder := range builders {
-		object, err := builder.Build()
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// validate resources required to creation of object
-		// depending on type of object we want to perform different checks
-		// for example: for sts we need to make that database secret(if provided) is valid to run teamcity
 		switch builder.(type) {
 
 		case *resource.StatefulSetBuilder:
@@ -111,22 +105,13 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				}
 			}
 		}
-
-		var operationResult controllerutil.OperationResult
-		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			log.V(1).Info(fmt.Sprintf("Attempting to update object of type %s", object.GetObjectKind().GroupVersionKind().Kind))
-			var apiError error
-			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, object, func() error {
-				return builder.Update(object)
-			})
-			return apiError
-		})
-
-		if err != nil {
-			log.V(1).Error(err, "Failed to update object")
+		if _, err := r.reconcileDelete(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
-		log.V(1).Info(fmt.Sprintf("Status of object %s is now %s", object.GetObjectKind().GroupVersionKind().Kind, operationResult))
+		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
+			return ctrl.Result{}, err
+		}
+
 	}
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	return ctrl.Result{}, nil
@@ -137,6 +122,8 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&jetbrainscomv1alpha1.TeamCity{}, builder.WithPredicates(predicate.TeamcityEventPredicates())). //separate predicates for TC and STS as they should be handled differently
 		Owns(&v1.StatefulSet{}, builder.WithPredicates(predicate.StatefulSetEventPredicates())).
+		Owns(&v12.Service{}).
+		Owns(&netv1.Ingress{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }
@@ -158,4 +145,48 @@ func (r *TeamcityReconciler) validateDatabaseSecret(ctx context.Context, req ctr
 		return err
 	}
 	return err
+}
+
+func (r *TeamcityReconciler) reconcileCreateOrUpdate(ctx context.Context, builder resource.ResourceBuilder) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	objectList, err := builder.BuildObjectList()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, object := range objectList {
+		var operationResult controllerutil.OperationResult
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			var apiError error
+			operationResult, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, object, func() error {
+				return builder.Update(object)
+			})
+			return apiError
+		})
+
+		if err != nil {
+			log.V(1).Error(err, fmt.Sprintf("Failed to update object %s %s", object.GetObjectKind().GroupVersionKind().Kind, object.GetName()))
+			return ctrl.Result{}, err
+		}
+		log.V(1).Info(fmt.Sprintf("Status of object %s %s is now %s", object.GetObjectKind().GroupVersionKind().Kind, object.GetName(), operationResult))
+
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *TeamcityReconciler) reconcileDelete(ctx context.Context, builder resource.ResourceBuilder) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	obsoleteObjects, err := builder.GetObsoleteObjects(ctx)
+	if err != nil {
+		log.V(1).Error(err, "Failed to get obsolete objects")
+		return ctrl.Result{}, err
+	}
+	for _, object := range obsoleteObjects {
+		// TODO: to check owner ref?
+		if err := r.Delete(ctx, object); err != nil {
+			log.V(1).Error(err, "Failed to delete obsolete object %s with type %s", object.GetName(), object.GetObjectKind().GroupVersionKind().Kind)
+			return ctrl.Result{}, err
+		}
+		log.V(1).Info(fmt.Sprintf("Obsolete object %s %s was deleted", object.GetObjectKind().GroupVersionKind().Kind, object.GetName()))
+	}
+	return ctrl.Result{}, nil
 }
