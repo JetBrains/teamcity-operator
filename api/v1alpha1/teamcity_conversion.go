@@ -46,6 +46,15 @@ func (src *TeamCity) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.StartupPropertiesConfig = src.Spec.StartupPropertiesConfig
 	dst.Spec.DatabaseSecret = v1beta1.DatabaseSecret(src.Spec.DatabaseSecret)
 
+	dst.Spec.IngressList = make([]v1beta1.Ingress, len(src.Spec.IngressList))
+	for i, e := range src.Spec.IngressList {
+		dst.Spec.IngressList[i] = v1beta1.Ingress(e)
+	}
+
+	dst.Spec.ServiceList = make([]v1beta1.Service, len(src.Spec.ServiceList))
+	for i, e := range src.Spec.ServiceList {
+		dst.Spec.ServiceList[i] = v1beta1.Service(e)
+	}
 	//object status
 	dst.Status = v1beta1.TeamCityStatus(src.Status)
 	return nil
@@ -85,6 +94,16 @@ func (dst *TeamCity) ConvertFrom(srcRaw conversion.Hub) error {
 	dst.Spec.InitContainers = src.Spec.InitContainers
 	dst.Spec.StartupPropertiesConfig = src.Spec.StartupPropertiesConfig
 	dst.Spec.DatabaseSecret = DatabaseSecret(src.Spec.DatabaseSecret)
+
+	dst.Spec.IngressList = make([]Ingress, len(src.Spec.IngressList))
+	for i, e := range src.Spec.IngressList {
+		dst.Spec.IngressList[i] = Ingress(e)
+	}
+
+	dst.Spec.ServiceList = make([]Service, len(src.Spec.ServiceList))
+	for i, e := range src.Spec.ServiceList {
+		dst.Spec.ServiceList[i] = Service(e)
+	}
 
 	dst.Status = TeamCityStatus(src.Status)
 	return nil

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +71,7 @@ func (builder *IngressBuilder) GetObsoleteObjects(ctx context.Context) ([]client
 	return obsoleteObjects, nil
 }
 
-func getIngressIndex(object client.Object, ingressList []v1alpha1.Ingress) int {
+func getIngressIndex(object client.Object, ingressList []v1beta1.Ingress) int {
 	for idx, ingress := range ingressList {
 		if ingress.Name == object.GetName() {
 			return idx

@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -63,6 +64,10 @@ type TeamCitySpec struct {
 	DatabaseSecret DatabaseSecret `json:"databaseSecret,omitempty"`
 	// +kubebuilder:default:={}
 	StartupPropertiesConfig map[string]string `json:"startupPropertiesConfig,omitempty"`
+	//+kubebuilder:default:={}
+	ServiceList []Service `json:"serviceList,omitempty"`
+	//+kubebuilder:default:={}
+	IngressList []Ingress `json:"ingressList,omitempty"`
 }
 
 type DatabaseSecret struct {
@@ -115,6 +120,18 @@ func (instance *TeamCity) DatabaseSecretProvided() bool {
 
 func (instance *TeamCity) DataDirPath() string {
 	return instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+}
+
+type Ingress struct {
+	Name        string            `json:"name,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	IngressSpec netv1.IngressSpec `json:"spec,omitempty"`
+}
+
+type Service struct {
+	Name        string            `json:"name,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	ServiceSpec v1.ServiceSpec    `json:"spec,omitempty"`
 }
 
 func init() {

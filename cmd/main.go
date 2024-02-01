@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -34,6 +35,7 @@ import (
 	jetbrainscomv1alpha1 "git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
 	jetbrainscomv1beta1 "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/controller"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -67,14 +69,23 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	var webhookOptions webhook.Options
+
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if certDirPath, present := os.LookupEnv("CERT_DIR_PATH"); present && certDirPath != "" {
+			webhookOptions = webhook.Options{
+				CertDir: certDirPath,
+			}
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		// Incompatibility with controller-runtime 0.16.3
-		//MetricsBindAddress:     metricsAddr,
-		//Port:                   9443,
+		Scheme:                 scheme,
+		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "1d18db30.jetbrains.com",
+		WebhookServer:          webhook.NewServer(webhookOptions),
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -100,10 +111,6 @@ func main() {
 		os.Exit(1)
 	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if certDirPath, present := os.LookupEnv("CERT_DIR_PATH"); present && certDirPath != "" {
-			whs := mgr.GetWebhookServer()
-			whs.CertDir = certDirPath
-		}
 		if err = (&jetbrainscomv1alpha1.TeamCity{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "TeamCity")
 			os.Exit(1)
