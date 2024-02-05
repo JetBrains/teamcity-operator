@@ -17,7 +17,7 @@ spec:
   env:
     AWS_DEFAULT_REGION: "eu-west-1"
   requests:
-    cpu: "1000m"
+    cpu: "500m"
     memory: "2500Mi"
   persistentVolumeClaims:
     - name: teamcity-node-volume1
@@ -40,30 +40,3 @@ spec:
         resources:
           requests:
             storage: 1Gi
-  serviceList:
-    - name: tc-sample
-      spec:
-        selector:
-          app.kubernetes.io/name: teamcity-sample
-          app.kubernetes.io/component: teamcity
-          app.kubernetes.io/part-of: teamcity
-        ports:
-          - protocol: TCP
-            port: 8111
-            targetPort: 8111
-        clusterIP: None
-  ingressList:
-  - name: tc-ingress
-    annotations: {}
-    spec:
-      ingressClassName: nginx
-      rules:
-        - host: tc-sample.myteamcity.com
-          http:
-            paths:
-              - backend:
-                  service:
-                    name: tc-sample
-                    port:
-                      number: 8111
-                pathType: ImplementationSpecific

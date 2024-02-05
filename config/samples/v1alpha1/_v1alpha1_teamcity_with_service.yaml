@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/part-of: teamcity-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: teamcity-operator
-  name: teamcity-sample
+  name: teamcity-sample-with-svc
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
@@ -17,8 +17,8 @@ spec:
   env:
     AWS_DEFAULT_REGION: "eu-west-1"
   requests:
-    cpu: "1000m"
-    memory: "2500Mi"
+    cpu: "400m"
+    memory: "1000Mi"
   persistentVolumeClaims:
     - name: teamcity-node-volume1
       volumeMount:
