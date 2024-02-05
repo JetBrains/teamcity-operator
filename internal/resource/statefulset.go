@@ -82,6 +82,8 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 
 	statefulSet := object.(*v1.StatefulSet)
 
+	volumes = builder.volumeBuilders()
+
 	volumeMounts := builder.volumeMountsBuilder()
 
 	dataDirPath := builder.Instance.DataDirPath()
@@ -243,6 +245,26 @@ func (builder *StatefulSetBuilder) convertStartUpPropertiesToServerOptions() (re
 	sortedKeys := SortKeysAlphabeticallyInMap(builder.Instance.Spec.StartupPropertiesConfig)
 	for _, k := range sortedKeys {
 		res += fmt.Sprintf(" -D%s=%s", k, builder.Instance.Spec.StartupPropertiesConfig[k])
+	}
+	return
+}
+
+func (builder *StatefulSetBuilder) volumeBuilders() (volumes []v12.Volume) {
+	volumes = append(volumes, v12.Volume{Name: builder.Instance.Spec.DataDirVolumeClaim.Name,
+		VolumeSource: v12.VolumeSource{
+			PersistentVolumeClaim: &v12.PersistentVolumeClaimVolumeSource{
+				ClaimName: builder.Instance.Spec.DataDirVolumeClaim.Name},
+		},
+	},
+	)
+	for _, claim := range builder.Instance.Spec.PersistentVolumeClaims {
+		volumes = append(volumes, v12.Volume{Name: claim.Name,
+			VolumeSource: v12.VolumeSource{
+				PersistentVolumeClaim: &v12.PersistentVolumeClaimVolumeSource{
+					ClaimName: claim.Name},
+			},
+		},
+		)
 	}
 	return
 }
