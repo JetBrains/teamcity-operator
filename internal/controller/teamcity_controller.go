@@ -124,7 +124,7 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1.StatefulSet{}, builder.WithPredicates(predicate.StatefulSetEventPredicates())).
 		Owns(&v12.Service{}).
 		Owns(&netv1.Ingress{}).
-		Owns(&v12.PersistentVolumeClaim{}).
+		Owns(&v12.PersistentVolumeClaim{}, builder.WithPredicates(predicate.PersistentVolumeClaimEventPredicates())).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }

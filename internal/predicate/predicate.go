@@ -2,6 +2,7 @@ package predicate
 
 import (
 	v1 "k8s.io/api/apps/v1"
+	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -40,6 +41,39 @@ func StatefulSetEventPredicates() predicate.Predicate {
 			return true
 		},
 	}
+}
+
+func PersistentVolumeClaimEventPredicates() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(createEvent event.CreateEvent) bool {
+			return true
+		},
+		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
+			return shouldFilterOutUpdateEventForPersistentVolumeClaim(updateEvent)
+		},
+		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+			return !deleteEvent.DeleteStateUnknown
+		},
+		GenericFunc: func(genericEvent event.GenericEvent) bool {
+			return true
+		},
+	}
+}
+
+func shouldFilterOutUpdateEventForPersistentVolumeClaim(event event.UpdateEvent) bool {
+
+	oldPVC, ok := event.ObjectOld.(*v12.PersistentVolumeClaim)
+	if !ok {
+		return false
+	}
+	newPVC, ok := event.ObjectNew.(*v12.PersistentVolumeClaim)
+	if !ok {
+		return false
+	}
+	if equal(oldPVC.Spec, newPVC.Spec) {
+		return false
+	}
+	return true
 }
 
 func shouldFilterOutUpdateEventForStatefulSet(event event.UpdateEvent) bool {
