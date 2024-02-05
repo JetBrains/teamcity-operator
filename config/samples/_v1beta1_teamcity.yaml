@@ -19,17 +19,18 @@ spec:
   requests:
     cpu: "1000m"
     memory: "2500Mi"
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
   persistentVolumeClaims:
-    - name: teamcity-node-volume1
-      volumeMount:
-        name: teamcity-node-volume1
-        mountPath: /storage
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
     - name: teamcity-node-config-dir
       volumeMount:
         name: teamcity-node-config-dir
