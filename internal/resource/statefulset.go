@@ -3,7 +3,6 @@ package resource
 import (
 	"context"
 	"fmt"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
@@ -32,11 +31,6 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
-	pvcList, err := builder.persistentVolumeClaimTemplatesBuilder()
-
-	if err != nil {
-		return nil, err
-	}
 
 	return []client.Object{
 		&v1.StatefulSet{
@@ -49,7 +43,6 @@ func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
 					MatchLabels: metadata.LabelSelector(builder.Instance.Name),
 				},
 
-				VolumeClaimTemplates: pvcList,
 				Template: v12.PodTemplateSpec{
 					Spec: v12.PodSpec{
 						InitContainers: []v12.Container{},
@@ -62,12 +55,6 @@ func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
 }
 
 func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-	pvcList, err := builder.persistentVolumeClaimTemplatesBuilder()
-
-	if err != nil {
-		return nil, err
-	}
-
 	return &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      builder.Instance.Name,
@@ -78,7 +65,6 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 				MatchLabels: metadata.LabelSelector(builder.Instance.Name),
 			},
 
-			VolumeClaimTemplates: pvcList,
 			Template: v12.PodTemplateSpec{
 				Spec: v12.PodSpec{
 					InitContainers: []v12.Container{},
@@ -137,29 +123,6 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 
 func (builder *StatefulSetBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
 	return []client.Object{}, nil
-}
-
-func (builder *StatefulSetBuilder) persistentVolumeClaimTemplatesBuilder() ([]v12.PersistentVolumeClaim, error) {
-	var pvcList []v12.PersistentVolumeClaim
-	dataDirClaim := builder.Instance.Spec.DataDirVolumeClaim
-	claims := []v1beta1.CustomPersistentVolumeClaim{dataDirClaim}
-	if builder.Instance.Spec.PersistentVolumeClaims != nil {
-		claims = append(claims, builder.Instance.Spec.PersistentVolumeClaims...)
-	}
-	for _, claim := range claims {
-		pvc := v12.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      claim.Name,
-				Namespace: builder.Instance.Namespace,
-			},
-			Spec: claim.Spec,
-		}
-		if err := controllerutil.SetControllerReference(builder.Instance, &pvc, builder.Scheme); err != nil {
-			return []v12.PersistentVolumeClaim{}, fmt.Errorf("failed setting controller reference: %w", err)
-		}
-		pvcList = append(pvcList, pvc)
-	}
-	return pvcList, nil
 }
 
 func (builder *StatefulSetBuilder) containerSpecBuilder(volumeMounts []v12.VolumeMount, env []v12.EnvVar) v12.Container {

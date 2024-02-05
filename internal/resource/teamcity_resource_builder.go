@@ -26,6 +26,7 @@ func (builder *TeamCityResourceBuilder) ResourceBuilders() []ResourceBuilder {
 		builder.StatefulSet(),
 		builder.Service(),
 		builder.Ingress(),
+		builder.PersistentVolumeClaim(),
 	}
 
 	return builders

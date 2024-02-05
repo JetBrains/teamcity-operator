@@ -55,11 +55,11 @@ func (builder *ServiceBuilder) Update(object client.Object) error {
 func (builder *ServiceBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
 	currentServiceList := &v12.ServiceList{}
 	obsoleteObjects := []client.Object{}
-	listOtions := []client.ListOption{
+	listOptions := []client.ListOption{
 		client.InNamespace(builder.Instance.Namespace),
 		client.MatchingLabels(metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)),
 	}
-	if err := builder.Client.List(ctx, currentServiceList, listOtions...); err != nil {
+	if err := builder.Client.List(ctx, currentServiceList, listOptions...); err != nil {
 		return nil, err
 	}
 	for _, service := range currentServiceList.Items {
