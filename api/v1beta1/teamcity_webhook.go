@@ -33,8 +33,6 @@ func (r *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-
 //+kubebuilder:webhook:path=/mutate-jetbrains-com-v1beta1-teamcity,mutating=true,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=mv1beta1teamcity.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &TeamCity{}
@@ -43,10 +41,8 @@ var _ webhook.Defaulter = &TeamCity{}
 func (r *TeamCity) Default() {
 	teamcitylog.Info("default", "name", r.Name)
 
-	// TODO(user): fill in your defaulting logic.
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 //+kubebuilder:webhook:path=/validate-jetbrains-com-v1beta1-teamcity,mutating=false,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=vv1beta1teamcity.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &TeamCity{}
@@ -55,7 +51,6 @@ var _ webhook.Validator = &TeamCity{}
 func (r *TeamCity) ValidateCreate() (admission.Warnings, error) {
 	teamcitylog.Info("validate create", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object creation.
 	return nil, nil
 }
 
@@ -63,7 +58,6 @@ func (r *TeamCity) ValidateCreate() (admission.Warnings, error) {
 func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	teamcitylog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
 	return nil, nil
 }
 
@@ -71,6 +65,5 @@ func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error
 func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
 	teamcitylog.Info("validate delete", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
 }
