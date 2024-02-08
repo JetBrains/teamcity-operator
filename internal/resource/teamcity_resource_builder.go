@@ -2,13 +2,13 @@ package resource
 
 import (
 	"context"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type TeamCityResourceBuilder struct {
-	Instance *v1beta1.TeamCity
+	Instance *TeamCity
 	Scheme   *runtime.Scheme
 	Client   client.Client
 }

@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -19,10 +19,10 @@ const (
 	TeamCityImage     = "jetbrains/teamcity-server:latest"
 )
 
-type ResourceModifier func(*v1beta1.TeamCity)
+type ResourceModifier func(*TeamCity)
 
 var (
-	Instance                  v1beta1.TeamCity
+	Instance                  TeamCity
 	DefaultStatefulSetBuilder *StatefulSetBuilder
 	DefaultServiceBuilder     *ServiceBuilder
 	DefaultIngressBuilder     *IngressBuilder
@@ -46,7 +46,7 @@ var (
 		VolumeMode:       &dataDirPVCVolumeMode,
 		Resources:        dataDirPVCResources,
 	}
-	dataDirPVC = v1beta1.CustomPersistentVolumeClaim{
+	dataDirPVC = CustomPersistentVolumeClaim{
 		Name: dataDirPVCName,
 		Spec: dataDirPVCSpec,
 		VolumeMount: corev1.VolumeMount{
@@ -71,7 +71,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	Instance = getBaseTcInstance()
 	scheme = runtime.NewScheme()
 
-	Expect(v1beta1.AddToScheme(scheme)).To(Succeed())
+	Expect(AddToScheme(scheme)).To(Succeed())
 	Expect(defaultscheme.AddToScheme(scheme)).To(Succeed())
 
 	modify(&Instance)
@@ -85,13 +85,13 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultIngressBuilder = builder.Ingress()
 }
 
-func getBaseTcInstance() v1beta1.TeamCity {
-	return v1beta1.TeamCity{
+func getBaseTcInstance() TeamCity {
+	return TeamCity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TeamCityName,
 			Namespace: TeamCityNamespace,
 		},
-		Spec: v1beta1.TeamCitySpec{
+		Spec: TeamCitySpec{
 			Image:              TeamCityImage,
 			Replicas:           &teamCityReplicas,
 			DataDirVolumeClaim: dataDirPVC,
@@ -108,8 +108,8 @@ func getStartupConfigurations() map[string]string {
 	}
 }
 
-func getDatabaseSecret() v1beta1.DatabaseSecret {
-	return v1beta1.DatabaseSecret{
+func getDatabaseSecret() DatabaseSecret {
+	return DatabaseSecret{
 		Secret: "database-secret",
 	}
 }
@@ -138,8 +138,8 @@ func getInitContainers() []corev1.Container {
 	}
 }
 
-func getAdditionalPVC() v1beta1.CustomPersistentVolumeClaim {
-	return v1beta1.CustomPersistentVolumeClaim{
+func getAdditionalPVC() CustomPersistentVolumeClaim {
+	return CustomPersistentVolumeClaim{
 		Name: "some-additional-data",
 		VolumeMount: corev1.VolumeMount{
 			Name:      "plugin-data",
@@ -154,8 +154,8 @@ func getAdditionalPVC() v1beta1.CustomPersistentVolumeClaim {
 	}
 }
 
-func getServiceList() []v1beta1.Service {
-	return []v1beta1.Service{
+func getServiceList() []Service {
+	return []Service{
 		{
 			Name: serviceNameMain,
 			Annotations: map[string]string{
@@ -187,7 +187,7 @@ func getServiceList() []v1beta1.Service {
 	}
 }
 
-func getIngressList() []v1beta1.Ingress {
+func getIngressList() []Ingress {
 	ingressClassName := "nginx"
 	ingressServiceBackend := netv1.IngressServiceBackend{
 		Name: serviceNameMain,
@@ -205,7 +205,7 @@ func getIngressList() []v1beta1.Ingress {
 	ingressRuleValue := netv1.IngressRuleValue{
 		HTTP: &ingressHttpRuleValue,
 	}
-	return []v1beta1.Ingress{
+	return []Ingress{
 		{
 			Name: ingressNameFirst,
 			Annotations: map[string]string{

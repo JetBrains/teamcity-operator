@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,7 +72,7 @@ func (builder *ServiceBuilder) GetObsoleteObjects(ctx context.Context) ([]client
 	return obsoleteObjects, nil
 }
 
-func getServiceIndex(object client.Object, serviceList []v1beta1.Service) int {
+func getServiceIndex(object client.Object, serviceList []Service) int {
 	for idx, service := range serviceList {
 		if service.Name == object.GetName() {
 			return idx

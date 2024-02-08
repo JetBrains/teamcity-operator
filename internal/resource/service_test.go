@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v12 "k8s.io/api/core/v1"
@@ -10,7 +10,7 @@ import (
 var _ = Describe("Service", func() {
 	Context("TeamCity with service", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1beta1.TeamCity) {
+			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.ServiceList = getServiceList()
 			})
 		})

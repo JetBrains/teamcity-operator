@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +35,7 @@ func (builder PersistentVolumeClaimBuilder) BuildObjectList() ([]client.Object, 
 
 func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 	var idx int
-	var pvcList []v1beta1.CustomPersistentVolumeClaim
+	var pvcList []CustomPersistentVolumeClaim
 	pvcList = append(pvcList, builder.Instance.Spec.DataDirVolumeClaim)
 	pvcList = append(pvcList, builder.Instance.Spec.PersistentVolumeClaims...)
 	if idx = builder.getPVCIndex(object, pvcList); idx == -1 {
@@ -67,7 +67,7 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 func (builder PersistentVolumeClaimBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
 	currentPVCList := &v12.PersistentVolumeClaimList{}
 	var obsoleteObjects []client.Object
-	var pvcList []v1beta1.CustomPersistentVolumeClaim
+	var pvcList []CustomPersistentVolumeClaim
 
 	listOptions := []client.ListOption{
 		client.InNamespace(builder.Instance.Namespace),
@@ -93,7 +93,7 @@ func (builder PersistentVolumeClaimBuilder) UpdateMayRequireStsRecreate() bool {
 	return false
 }
 
-func (builder PersistentVolumeClaimBuilder) getPVCIndex(object client.Object, pvcList []v1beta1.CustomPersistentVolumeClaim) int {
+func (builder PersistentVolumeClaimBuilder) getPVCIndex(object client.Object, pvcList []CustomPersistentVolumeClaim) int {
 	for idx, pvc := range pvcList {
 		if pvc.Name == object.GetName() {
 			return idx

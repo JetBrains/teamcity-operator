@@ -1,7 +1,7 @@
 package resource
 
 import (
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	netv1 "k8s.io/api/networking/v1"
@@ -10,7 +10,7 @@ import (
 var _ = Describe("Ingress", func() {
 	Context("TeamCity with ingress", func() {
 		BeforeEach(func() {
-			BeforeEachBuild(func(teamcity *v1beta1.TeamCity) {
+			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.ServiceList = getServiceList()
 				teamcity.Spec.IngressList = getIngressList()
 			})

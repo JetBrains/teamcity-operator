@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/apps/v1"
@@ -24,7 +24,7 @@ var _ = Describe("TeamCity controller", func() {
 		)
 
 		var TeamCityReplicas = int32(0)
-		var teamcity *v1beta1.TeamCity
+		var teamcity *TeamCity
 		var (
 			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
 			pvcStorageClassName = "standard"
@@ -41,7 +41,7 @@ var _ = Describe("TeamCity controller", func() {
 				VolumeMode:       &pvcVolumeMode,
 				Resources:        pvcResources,
 			}
-			pvc = v1beta1.CustomPersistentVolumeClaim{
+			pvc = CustomPersistentVolumeClaim{
 				Name: pvcName,
 				Spec: pvcSpec,
 			}
@@ -52,7 +52,7 @@ var _ = Describe("TeamCity controller", func() {
 		)
 
 		BeforeEach(func() {
-			teamcity = &v1beta1.TeamCity{
+			teamcity = &TeamCity{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "jetbrains.com/v1beta1",
 					Kind:       "TeamCity",
@@ -61,7 +61,7 @@ var _ = Describe("TeamCity controller", func() {
 					Name:      TeamCityName,
 					Namespace: TeamCityNamespace,
 				},
-				Spec: v1beta1.TeamCitySpec{
+				Spec: TeamCitySpec{
 					Image:              TeamCityImage,
 					Replicas:           &TeamCityReplicas,
 					Requests:           requests,
@@ -81,7 +81,7 @@ var _ = Describe("TeamCity controller", func() {
 
 		It("should successfully reconcile an operand", func() {
 			By("setting operand properties correctly", func() {
-				fetchedTeamCity := &v1beta1.TeamCity{}
+				fetchedTeamCity := &TeamCity{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: TeamCityName, Namespace: TeamCityNamespace}, fetchedTeamCity)).To(Succeed())
 				Expect(fetchedTeamCity.Spec.Image).To(Equal(TeamCityImage))
 				Expect(fetchedTeamCity.Spec.Replicas).To(Equal(&TeamCityReplicas))
@@ -108,8 +108,8 @@ var _ = Describe("TeamCity controller", func() {
 			TeamCityDatabaseSecretName = "database-secret"
 		)
 		var (
-			teamcity       *v1beta1.TeamCity
-			databaseSecret = v1beta1.DatabaseSecret{
+			teamcity       *TeamCity
+			databaseSecret = DatabaseSecret{
 				Secret: TeamCityDatabaseSecretName,
 			}
 			databaseProperties *corev1.Secret
@@ -129,14 +129,14 @@ var _ = Describe("TeamCity controller", func() {
 				VolumeMode:       &pvcVolumeMode,
 				Resources:        pvcResources,
 			}
-			dataDirPVC = v1beta1.CustomPersistentVolumeClaim{
+			dataDirPVC = CustomPersistentVolumeClaim{
 				Name:        dataDirPVCName,
 				Spec:        pvcSpec,
 				VolumeMount: corev1.VolumeMount{MountPath: "/storage"},
 			}
 
 			configDirPVCName = "test-config-dir-pvc"
-			configDirPVC     = v1beta1.CustomPersistentVolumeClaim{
+			configDirPVC     = CustomPersistentVolumeClaim{
 				Name:        configDirPVCName,
 				VolumeMount: corev1.VolumeMount{MountPath: "/storage/config"},
 				Spec:        pvcSpec,
@@ -162,7 +162,7 @@ var _ = Describe("TeamCity controller", func() {
 					"database.properties": []byte("connectionUrl=jdbc:mysql://mysql.default:3306/fetchTeamcity\nconnectionProperties.user=root\nconnectionProperties.password=password"),
 				},
 			}
-			teamcity = &v1beta1.TeamCity{
+			teamcity = &TeamCity{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "jetbrains.com/v1beta1",
 					Kind:       "TeamCity",
@@ -171,10 +171,10 @@ var _ = Describe("TeamCity controller", func() {
 					Name:      TeamCityName,
 					Namespace: TeamCityNamespace,
 				},
-				Spec: v1beta1.TeamCitySpec{
+				Spec: TeamCitySpec{
 					Image:                  TeamCityImage,
 					DataDirVolumeClaim:     dataDirPVC,
-					PersistentVolumeClaims: []v1beta1.CustomPersistentVolumeClaim{configDirPVC},
+					PersistentVolumeClaims: []CustomPersistentVolumeClaim{configDirPVC},
 					Replicas:               &TeamCityReplicas,
 					Requests:               requests,
 					DatabaseSecret:         databaseSecret,
@@ -218,7 +218,7 @@ var _ = Describe("TeamCity controller", func() {
 	})
 })
 
-func statefulSet(ctx context.Context, teamcity *v1beta1.TeamCity) (statefulSet *v1.StatefulSet) {
+func statefulSet(ctx context.Context, teamcity *TeamCity) (statefulSet *v1.StatefulSet) {
 	EventuallyWithOffset(1, func() error {
 		var err error
 		statefulSet, err = clientSet.AppsV1().StatefulSets(teamcity.Namespace).Get(ctx, teamcity.Name, metav1.GetOptions{})
