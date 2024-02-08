@@ -270,11 +270,3 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
-
-#.PHONY: generate-certs
-#generate-certs: ## Generates the certs required to run webhooks locally
-#	mkdir -p certs
-#	export CAROOT=$(pwd)/certs
-#	mkcert -install
-#	mkcert -cert-file=$CAROOT/tls.crt -key-file=$CAROOT/tls.key host.docker.internal 172.17.0.1 host.minikube.internal
-
