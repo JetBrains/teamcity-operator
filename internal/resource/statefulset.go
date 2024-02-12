@@ -220,7 +220,7 @@ func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults ma
 }
 
 func (builder *StatefulSetBuilder) volumeMountsBuilder() (volumeMounts []v12.VolumeMount) {
-	volumeMounts = append(volumeMounts, v12.VolumeMount{Name: builder.Instance.Spec.DataDirVolumeClaim.Name, MountPath: builder.Instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath})
+	volumeMounts = append(volumeMounts, v12.VolumeMount{Name: builder.Instance.Spec.DataDirVolumeClaim.VolumeMount.Name, MountPath: builder.Instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath})
 	for _, claim := range builder.Instance.Spec.PersistentVolumeClaims {
 		volumeMounts = append(volumeMounts, v12.VolumeMount{Name: claim.VolumeMount.Name, MountPath: claim.VolumeMount.MountPath})
 	}

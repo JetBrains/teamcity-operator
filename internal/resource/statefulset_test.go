@@ -10,7 +10,6 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"strings"
 )
 
@@ -105,32 +104,23 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(statefulSet.OwnerReferences)).To(Equal(1))
 			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
 		})
-		It("creates data dir PVC", func() {
+		It("creates data dir volume and volume mount", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
-			statefulSet := obj.(*v1.StatefulSet)
 
-			expected := []v12.PersistentVolumeClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      dataDirPVCName,
-						Namespace: builder.Instance.Namespace,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         "jetbrains.com/v1beta1",
-								Kind:               "TeamCity",
-								Name:               builder.Instance.GetName(),
-								UID:                builder.Instance.GetUID(),
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-							},
-						},
-					},
-					Spec: dataDirPVCSpec,
-				},
-			}
-			actual := statefulSet.Spec.VolumeClaimTemplates
-			Expect(actual).To(Equal(expected))
+			statefulSet := obj.(*v1.StatefulSet)
+			Expect(DefaultStatefulSetBuilder.Update(statefulSet)).To(Succeed())
+			Expect(len(statefulSet.Spec.Template.Spec.Volumes)).To(Equal(1))
+
+			dataDirVolume := statefulSet.Spec.Template.Spec.Volumes[0]
+			Expect(dataDirVolume.Name).To(Equal(dataDirPVC.Name))
+
+			teamcityContainer := statefulSet.Spec.Template.Spec.Containers[0]
+			Expect(len(teamcityContainer.VolumeMounts)).To(Equal(1))
+
+			dataDirVolumeMount := teamcityContainer.VolumeMounts[0]
+			Expect(dataDirVolumeMount.Name).To(Equal(dataDirPVC.VolumeMount.Name))
+			Expect(dataDirVolumeMount.MountPath).To(Equal(dataDirPVC.VolumeMount.MountPath))
 		})
 	})
 	Context("TeamCity with init containers", func() {
@@ -174,9 +164,9 @@ var _ = Describe("StatefulSet", func() {
 			statefulSet := obj.(*v1.StatefulSet)
 
 			volumes := statefulSet.Spec.Template.Spec.Volumes
-			Expect(len(volumes)).To(Equal(1))
+			Expect(len(volumes)).To(Equal(2))
 
-			databaseSecretVolume := volumes[0]
+			databaseSecretVolume := volumes[1]
 			Expect(databaseSecretVolume.Name).To(Equal(DATABASE_PROPERTIES_VOLUME_NAME))
 			Expect(databaseSecretVolume.Secret.SecretName).To(Equal(Instance.Spec.DatabaseSecret.Secret))
 
@@ -228,17 +218,15 @@ var _ = Describe("StatefulSet", func() {
 				teamcity.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{getAdditionalPVC()}
 			})
 		})
-		It("sets additional pvc correctly", func() {
+		It("sets additional volumes correctly", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
 			err = DefaultStatefulSetBuilder.Update(obj)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
 
-			volumeClaimTemplates := statefulSet.Spec.VolumeClaimTemplates
-			Expect(len(volumeClaimTemplates)).To(Equal(2))
-			additionalPVC := volumeClaimTemplates[1] // index 0 is reserved for data dir
-			Expect(additionalPVC.Name).To(Not(Equal(dataDirPVCName)))
+			volumes := statefulSet.Spec.Template.Spec.Volumes
+			Expect(len(volumes)).To(Equal(2))
 
 		})
 	})
