@@ -22,10 +22,11 @@ const (
 type ResourceModifier func(*TeamCity)
 
 var (
-	Instance                  TeamCity
-	DefaultStatefulSetBuilder *StatefulSetBuilder
-	DefaultServiceBuilder     *ServiceBuilder
-	DefaultIngressBuilder     *IngressBuilder
+	Instance                            TeamCity
+	DefaultStatefulSetBuilder           *StatefulSetBuilder
+	DefaultServiceBuilder               *ServiceBuilder
+	DefaultIngressBuilder               *IngressBuilder
+	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -83,6 +84,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultStatefulSetBuilder = builder.StatefulSet()
 	DefaultServiceBuilder = builder.Service()
 	DefaultIngressBuilder = builder.Ingress()
+	DefaultPersistentVolumeClaimBuilder = builder.PersistentVolumeClaim()
 }
 
 func getBaseTcInstance() TeamCity {
