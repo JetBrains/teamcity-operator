@@ -8,7 +8,7 @@ import (
 )
 
 var _ = Describe("Database Secret Validator", func() {
-	Context("Secret object with with valid configuration", func() {
+	Context("Secret object with valid configuration", func() {
 		It("produces no error on valid object", func() {
 			secret := v12.Secret{
 				Data: map[string][]byte{
