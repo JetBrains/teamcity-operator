@@ -52,7 +52,7 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 	if len(persistentVolumeClaim.Spec.VolumeName) < 0 {
 		persistentVolumeClaim.Spec.VolumeName = desired.Spec.VolumeName
 	}
-	if len(*persistentVolumeClaim.Spec.StorageClassName) < 0 {
+	if persistentVolumeClaim.Spec.StorageClassName == nil {
 		persistentVolumeClaim.Spec.StorageClassName = desired.Spec.StorageClassName
 	}
 	if persistentVolumeClaim.Spec.VolumeMode == nil {
