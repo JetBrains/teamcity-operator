@@ -17,11 +17,13 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
 
 // log is for logging in this package.
@@ -50,14 +52,18 @@ var _ webhook.Validator = &TeamCity{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *TeamCity) ValidateCreate() (admission.Warnings, error) {
 	teamcitylog.Info("validate create", "name", r.Name)
-
+	if warn, err := validateCommonFields(r); err != nil {
+		return warn, err
+	}
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	teamcitylog.Info("validate update", "name", r.Name)
-
+	if warn, err := validateCommonFields(r); err != nil {
+		return warn, err
+	}
 	return nil, nil
 }
 
@@ -66,4 +72,94 @@ func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
 	teamcitylog.Info("validate delete", "name", r.Name)
 
 	return nil, nil
+}
+
+func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
+	if err := validateReplicas(teamcity); err != nil {
+		return nil, err
+	}
+	if err := validateRequests(teamcity); err != nil {
+		return nil, err
+	}
+	if err := validateXmxPercentage(teamcity); err != nil {
+		return nil, err
+	}
+	if err := validateAllCustomPersistentVolumeClaimsInObject(teamcity); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func validateXmxPercentage(teamcity *TeamCity) (err error) {
+	if teamcity.Spec.XmxPercentage <= 0 {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.xmxPercentage",
+			ErrorMessage: "Xmx percentage cannot be set to 0 or lower",
+		}
+	}
+	return nil
+}
+
+func validateReplicas(teamcity *TeamCity) (err error) {
+	if *teamcity.Spec.Replicas > 1 {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.replicas",
+			ErrorMessage: "Replicas value cannot be greater than 1",
+		}
+	}
+	return nil
+}
+
+func validateRequests(teamcity *TeamCity) (err error) {
+	if len(teamcity.Spec.Requests.Memory().String()) <= 0 {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.requests.memory",
+			ErrorMessage: "Requested memory cannot be empty",
+		}
+	}
+	return nil
+
+}
+
+func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err error) {
+	if err = validateCustomPersistentVolumeClaim("teamcity.spec.dataDirVolumeClaim", teamcity.Spec.DataDirVolumeClaim); err != nil {
+		return err
+	}
+	for idx, additionalVolumeClaim := range teamcity.Spec.PersistentVolumeClaims {
+		if err = validateCustomPersistentVolumeClaim(fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d]", idx), additionalVolumeClaim); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCustomPersistentVolumeClaim(objectPath string, claim CustomPersistentVolumeClaim) error {
+	if len(claim.Name) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "name"),
+			ErrorMessage: "Claim name is not set",
+		}
+	}
+	if len(claim.VolumeMount.Name) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "volumeMount.name"),
+			ErrorMessage: "Volume mount name is not set",
+		}
+	}
+	if len(claim.VolumeMount.MountPath) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "volumeMount.mountPath"),
+			ErrorMessage: "Volume mount path is not set",
+		}
+	}
+
+	if len(claim.Spec.Resources.Requests.Storage().String()) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "spec.resources.requests.storage"),
+			ErrorMessage: "Storage request is not set",
+		}
+	}
+
+	return nil
 }
