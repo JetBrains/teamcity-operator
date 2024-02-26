@@ -32,6 +32,8 @@ var _ = Describe("StatefulSet", func() {
 
 			labels := statefulSet.Spec.Selector.MatchLabels
 			Expect(labels["app.kubernetes.io/name"]).To(Equal(Instance.Name))
+			Expect(labels["app.kubernetes.io/component"]).To(Equal("teamcity"))
+			Expect(labels["app.kubernetes.io/part-of"]).To(Equal("teamcity"))
 		})
 		It("sets required resources requests for container", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
