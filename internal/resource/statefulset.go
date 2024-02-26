@@ -40,7 +40,7 @@ func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
 			},
 			Spec: v1.StatefulSetSpec{
 				Selector: &metav1.LabelSelector{
-					MatchLabels: metadata.LabelSelector(builder.Instance.Name),
+					MatchLabels: metadata.GetLabelSelector(builder.Instance.Name),
 				},
 
 				Template: v12.PodTemplateSpec{
@@ -59,10 +59,11 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      builder.Instance.Name,
 			Namespace: builder.Instance.Namespace,
+			Labels:    metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels),
 		},
 		Spec: v1.StatefulSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: metadata.LabelSelector(builder.Instance.Name),
+				MatchLabels: metadata.GetLabelSelector(builder.Instance.Name),
 			},
 
 			Template: v12.PodTemplateSpec{
@@ -106,9 +107,8 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	envVars := builder.environmentVariablesBuilder(defaultEnvVars, extraEnvVars)
 
 	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
-	statefulSet.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 
-	statefulSet.Spec.Template.Labels = metadata.Label(builder.Instance.Name)
+	statefulSet.Spec.Template.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
 
 	statefulSet.Spec.Template.Spec.Volumes = volumes
