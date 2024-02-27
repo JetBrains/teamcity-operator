@@ -117,6 +117,7 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	teamcityContainer := builder.containerSpecBuilder(volumeMounts, envVars)
 	statefulSet.Spec.Template.Spec.Containers = []v12.Container{teamcityContainer}
 	statefulSet.Spec.Template.Spec.NodeSelector = builder.Instance.Spec.NodeSelector
+	statefulSet.Spec.Template.Spec.Affinity = &builder.Instance.Spec.Affinity
 
 	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)

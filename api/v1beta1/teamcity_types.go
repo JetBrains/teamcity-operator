@@ -67,8 +67,11 @@ type TeamCitySpec struct {
 	//+kubebuilder:default:={}
 	ServiceList []Service `json:"serviceList,omitempty"`
 	//+kubebuilder:default:={}
-	IngressList  []Ingress         `json:"ingressList,omitempty"`
+	IngressList []Ingress `json:"ingressList,omitempty"`
+
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	Affinity v1.Affinity `json:"affinity,omitempty"`
 }
 
 type DatabaseSecret struct {
