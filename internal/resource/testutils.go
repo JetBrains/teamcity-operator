@@ -116,6 +116,13 @@ func getDatabaseSecret() DatabaseSecret {
 	}
 }
 
+func getNodeSelector() map[string]string {
+	return map[string]string{
+		"hello": "world",
+		"foo":   "bar",
+	}
+}
+
 func getInitContainers() []corev1.Container {
 	return []corev1.Container{
 		{

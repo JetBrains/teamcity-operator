@@ -227,10 +227,23 @@ var _ = Describe("StatefulSet", func() {
 
 			volumes := statefulSet.Spec.Template.Spec.Volumes
 			Expect(len(volumes)).To(Equal(2))
-
 		})
 	})
-
+	Context("TeamCity with node selector", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.NodeSelector = getNodeSelector()
+			})
+		})
+		It("sets node selector terms correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(getNodeSelector()))
+		})
+	})
 })
 
 func RemoveEmptyStrings(s []string) []string {
