@@ -244,6 +244,28 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(getNodeSelector()))
 		})
 	})
+	Context("TeamCity with affinity", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.Affinity = getAffinity()
+			})
+		})
+		It("sets affinity correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			affinity := statefulSet.Spec.Template.Spec.Affinity
+			Expect(affinity.NodeAffinity).NotTo(Equal(nil))
+			nodeSelectorTerms := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+			Expect(len(nodeSelectorTerms)).To(Equal(1))
+			Expect(nodeSelectorTerms[0].MatchExpressions[0].Key).To(Equal("some-key"))
+			Expect(len(nodeSelectorTerms[0].MatchExpressions[0].Values)).To(Equal(1))
+			Expect(nodeSelectorTerms[0].MatchExpressions[0].Values[0]).To(Equal("some-value"))
+
+		})
+	})
 })
 
 func RemoveEmptyStrings(s []string) []string {

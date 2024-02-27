@@ -123,6 +123,40 @@ func getNodeSelector() map[string]string {
 	}
 }
 
+func getAffinity() corev1.Affinity {
+	return corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "some-key",
+								Operator: "In",
+								Values:   []string{"some-value"},
+							},
+						},
+					},
+				},
+			},
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+				{
+					Weight: 5,
+					Preference: corev1.NodeSelectorTerm{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "some-key",
+								Operator: "In",
+								Values:   []string{"some-value"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func getInitContainers() []corev1.Container {
 	return []corev1.Container{
 		{
