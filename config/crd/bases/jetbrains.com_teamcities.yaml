@@ -2125,6 +2125,10 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
               persistentVolumeClaims:
                 items:
                   properties:
