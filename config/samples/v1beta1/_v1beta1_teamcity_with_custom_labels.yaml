@@ -1,6 +1,9 @@
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
+  labels:
+    app.kubernetes.io/name: teamcity #this labels will be ignored because it tries to override a default one
+    foo: bar #this custom label will be applied
   name: teamcity-sample-beta
   namespace: default
   finalizers:
