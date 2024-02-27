@@ -25,6 +25,16 @@ var _ = Describe("StatefulSet", func() {
 			Expect(sts.Name).To(Equal(TeamCityName))
 			Expect(sts.Namespace).To(Equal(TeamCityNamespace))
 		})
+		It("adds default labels", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			labels := statefulSet.Labels
+			Expect(labels["app.kubernetes.io/name"]).To(Equal(Instance.Name))
+			Expect(labels["app.kubernetes.io/component"]).To(Equal("teamcity"))
+			Expect(labels["app.kubernetes.io/part-of"]).To(Equal("teamcity"))
+		})
 		It("adds the correct label selector", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
@@ -230,6 +240,37 @@ var _ = Describe("StatefulSet", func() {
 			volumes := statefulSet.Spec.Template.Spec.Volumes
 			Expect(len(volumes)).To(Equal(2))
 
+		})
+	})
+
+	Context("TeamCity with custom labels", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Labels = getLabels()
+			})
+		})
+		It("sets labels correctly in StatefulSet spec", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			statefulSetLabels := statefulSet.Labels
+			expectedLabels := getLabels()
+			Expect(statefulSetLabels["foo"]).To(Equal(expectedLabels["foo"]))
+			Expect(statefulSetLabels["teamcity"]).To(Equal(expectedLabels["teamcity"]))
+		})
+		It("does not allow a label with existing key to override default label", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+
+			statefulSetLabels := statefulSet.Labels
+			providedLabels := getLabels()
+			Expect(statefulSetLabels["app.kubernetes.io/name"]).ToNot(Equal(providedLabels["app.kubernetes.io/name"]))
 		})
 	})
 
