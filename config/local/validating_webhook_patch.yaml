@@ -4,8 +4,3 @@
   value:
     caBundle: ${CA_BUNDLE}
     url: https://host.minikube.internal:9443/validate-jetbrains-com-v1beta1-teamcity
-- op: replace
-  path: /webhooks/1/clientConfig
-  value:
-    caBundle: ${CA_BUNDLE}
-    url: https://host.minikube.internal:9443/validate-jetbrains-com-v1alpha1-teamcity

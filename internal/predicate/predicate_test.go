@@ -1,7 +1,7 @@
 package predicate
 
 import (
-	"git.jetbrains.team/tch/teamcity-operator/api/v1alpha1"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/apps/v1"
@@ -70,7 +70,7 @@ var _ = Describe("Predicate", func() {
 		It("should filter create events  correctly", func() {
 			By("returning true when it's a create event", func() {
 				result := predicate.Create(event.CreateEvent{
-					Object: &v1alpha1.TeamCity{},
+					Object: &TeamCity{},
 				})
 				Expect(result).To(Equal(true))
 			})
@@ -92,8 +92,8 @@ var _ = Describe("Predicate", func() {
 		It("should filter update events correctly", func() {
 			By("returning true when it's a create event", func() {
 				result := predicate.Update(event.UpdateEvent{
-					ObjectOld: &v1alpha1.TeamCity{},
-					ObjectNew: &v1alpha1.TeamCity{},
+					ObjectOld: &TeamCity{},
+					ObjectNew: &TeamCity{},
 				})
 				Expect(result).To(Equal(true))
 			})
