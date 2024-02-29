@@ -1,12 +1,6 @@
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
-  labels:
-    app.kubernetes.io/name: teamcity
-    app.kubernetes.io/instance: teamcity
-    app.kubernetes.io/part-of: teamcity-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: teamcity-operator
   name: teamcity-with-startup-properties
   namespace: default
   finalizers:
