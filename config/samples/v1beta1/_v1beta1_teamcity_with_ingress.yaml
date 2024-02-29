@@ -1,12 +1,6 @@
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
-  labels:
-    app.kubernetes.io/name: teamcity
-    app.kubernetes.io/instance: teamcity-sample
-    app.kubernetes.io/part-of: teamcity-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: teamcity-operator
   name: teamcity-sample-with-ingress
   namespace: default
   finalizers:
@@ -42,10 +36,10 @@ spec:
           requests:
             storage: 1Gi
   serviceList:
-    - name: tc-sample
+    - name: tc-sample-for-ingress
       spec:
         selector:
-          app.kubernetes.io/name: teamcity-sample
+          app.kubernetes.io/name: teamcity-sample-with-ingress
           app.kubernetes.io/component: teamcity
           app.kubernetes.io/part-of: teamcity
         ports:

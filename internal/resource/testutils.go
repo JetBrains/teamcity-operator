@@ -230,6 +230,14 @@ func getServiceList() []Service {
 	}
 }
 
+func getLabels() map[string]string {
+	return map[string]string{
+		"foo":                    "bar",
+		"teamcity":               "the best",
+		"app.kubernetes.io/name": "label-override-test",
+	}
+}
+
 func getIngressList() []Ingress {
 	ingressClassName := "nginx"
 	ingressServiceBackend := netv1.IngressServiceBackend{
