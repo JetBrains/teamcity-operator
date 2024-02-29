@@ -316,7 +316,6 @@ var _ = Describe("StatefulSet", func() {
 			})
 		})
 		It("sets annotations correctly", func() {
-
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
 			err = DefaultStatefulSetBuilder.Update(obj)
