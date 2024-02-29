@@ -123,6 +123,13 @@ func getNodeSelector() map[string]string {
 	}
 }
 
+func getPodAnnotations() map[string]string {
+	return map[string]string{
+		"hello": "world",
+		"foo":   "bar",
+	}
+}
+
 func getAffinity() corev1.Affinity {
 	return corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{

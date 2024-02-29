@@ -266,6 +266,23 @@ var _ = Describe("StatefulSet", func() {
 
 		})
 	})
+	Context("TeamCity with annotations", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.Annotations = getPodAnnotations()
+			})
+		})
+		It("sets annotations correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.Build()
+			Expect(err).NotTo(HaveOccurred())
+			err = DefaultStatefulSetBuilder.Update(obj)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := obj.(*v1.StatefulSet)
+			annotations := statefulSet.Spec.Template.Annotations
+			Expect(annotations).To(Equal(getPodAnnotations()))
+		})
+	})
+
 })
 
 func RemoveEmptyStrings(s []string) []string {
