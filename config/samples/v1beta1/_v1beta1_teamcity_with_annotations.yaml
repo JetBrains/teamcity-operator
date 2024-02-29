@@ -21,6 +21,8 @@ spec:
     memory: "1000Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
+    annotations:
+      pv.beta.kubernetes.io/gid: "1000"
     volumeMount:
       name: teamcity-node-volume1
       mountPath: /storage

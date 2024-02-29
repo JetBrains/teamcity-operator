@@ -82,6 +82,7 @@ type DatabaseSecret struct {
 
 type CustomPersistentVolumeClaim struct {
 	Name        string                       `json:"name"`
+	Annotations map[string]string            `json:"annotations,omitempty"`
 	VolumeMount v1.VolumeMount               `json:"volumeMount"`
 	Spec        v1.PersistentVolumeClaimSpec `json:"spec"`
 }
