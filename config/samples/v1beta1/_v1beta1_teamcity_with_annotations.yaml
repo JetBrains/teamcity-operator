@@ -9,7 +9,7 @@ spec:
   annotations:
     prometheus.io/scrape: 'true'
     prometheus.io/path: '/app/metrics'
-    prometheus.io/port: '811'
+    prometheus.io/port: '8111'
   image: jetbrains/teamcity-server
   replicas: 1
   startupPropertiesConfig:
@@ -32,3 +32,31 @@ spec:
       resources:
         requests:
           storage: 1Gi
+  serviceList:
+    - name: teamcity-with-annotations
+      annotations:
+        foo: bar
+      spec:
+        selector:
+          app.kubernetes.io/name: teamcity-with-annotations
+        ports:
+          - protocol: TCP
+            port: 8111
+            targetPort: 8111
+        clusterIP: None
+  ingressList:
+    - name: teamcity-with-annotations
+      annotations:
+        "nginx.ingress.kubernetes.io/affinity": "cookie"
+      spec:
+        ingressClassName: nginx
+        rules:
+          - host: teamcity-with-annotations.myteamcity.com
+            http:
+              paths:
+                - backend:
+                    service:
+                      name: teamcity-with-annotations
+                      port:
+                        number: 8111
+                  pathType: ImplementationSpecific
