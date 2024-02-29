@@ -5,6 +5,7 @@ import (
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -104,7 +105,7 @@ var _ = Describe("TeamCity controller", func() {
 		const (
 			TeamCityName               = "test-with-database"
 			TeamCityNamespace          = "default"
-			TeamCityImage              = "jetbrains/fetchTeamcity-server:latest"
+			TeamCityImage              = "jetbrains/teamcity-server:latest"
 			TeamCityDatabaseSecretName = "database-secret"
 		)
 		var (
@@ -159,7 +160,9 @@ var _ = Describe("TeamCity controller", func() {
 					Namespace: TeamCityNamespace,
 				},
 				Data: map[string][]byte{
-					"database.properties": []byte("connectionUrl=jdbc:mysql://mysql.default:3306/fetchTeamcity\nconnectionProperties.user=root\nconnectionProperties.password=password"),
+					"connectionUrl":                 []byte("jdbc:mysql://mysql.default:3306/teamcity"),
+					"connectionProperties.user":     []byte("root"),
+					"connectionProperties.password": []byte("password"),
 				},
 			}
 			teamcity = &TeamCity{
@@ -206,8 +209,19 @@ var _ = Describe("TeamCity controller", func() {
 				var producedStatefulSet *v1.StatefulSet
 				producedStatefulSet = statefulSet(ctx, teamcity)
 				Expect(producedStatefulSet).ToNot(BeNil())
-				teamcityContainer := producedStatefulSet.Spec.Template.Spec.Containers[0]
-				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(3))
+				envVars := producedStatefulSet.Spec.Template.Spec.Containers[0].Env
+
+				dbUserIdx := slices.IndexFunc(envVars, func(v corev1.EnvVar) bool { return v.Name == "TEAMCITY_DB_USER" })
+				Expect(envVars[dbUserIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(corev1.LocalObjectReference{Name: databaseSecret.Secret}))
+				Expect(envVars[dbUserIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionProperties.user"))
+
+				dbPasswordIdx := slices.IndexFunc(envVars, func(v corev1.EnvVar) bool { return v.Name == "TEAMCITY_DB_PASSWORD" })
+				Expect(envVars[dbPasswordIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(corev1.LocalObjectReference{Name: databaseSecret.Secret}))
+				Expect(envVars[dbPasswordIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionProperties.password"))
+
+				dbURLIdx := slices.IndexFunc(envVars, func(v corev1.EnvVar) bool { return v.Name == "TEAMCITY_DB_URL" })
+				Expect(envVars[dbURLIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(corev1.LocalObjectReference{Name: databaseSecret.Secret}))
+				Expect(envVars[dbURLIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionUrl"))
 			})
 			By("adds init containers", func() {
 				var producedStatefulSet *v1.StatefulSet
