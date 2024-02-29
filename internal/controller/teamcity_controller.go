@@ -22,7 +22,6 @@ import (
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
-	"git.jetbrains.team/tch/teamcity-operator/internal/validator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
@@ -122,20 +121,6 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *TeamCity) error {
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
 	return nil
-}
-
-func (r *TeamcityReconciler) validateDatabaseSecret(ctx context.Context, req ctrl.Request, secretName string) (err error) {
-	var databaseSecret v12.Secret
-	if databaseSecret, err = GetSecretE(r, ctx, secretName, req.Namespace); err != nil {
-		_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
-		return err
-	}
-	dbValidator := validator.DatabaseSecretValidator{Object: &databaseSecret}
-	if err = dbValidator.ValidateObject(); err != nil {
-		_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_ERROR_STATE, err.Error())
-		return err
-	}
-	return err
 }
 
 func (r *TeamcityReconciler) reconcileCreateOrUpdate(ctx context.Context, builder resource.ResourceBuilder) (ctrl.Result, error) {
