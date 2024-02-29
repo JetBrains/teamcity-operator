@@ -96,22 +96,12 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	builders := resourceBuilder.ResourceBuilders()
 
 	for _, builder := range builders {
-		switch builder.(type) {
-
-		case *resource.StatefulSetBuilder:
-			if teamcity.Spec.DatabaseSecret.Secret != "" {
-				if err = r.validateDatabaseSecret(ctx, req, teamcity.Spec.DatabaseSecret.Secret); err != nil {
-					return ctrl.Result{}, err
-				}
-			}
-		}
 		if _, err := r.reconcileDelete(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
 		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
-
 	}
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	return ctrl.Result{}, nil

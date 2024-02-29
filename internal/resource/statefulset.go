@@ -91,13 +91,6 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 
 	initContainers := builder.Instance.Spec.InitContainers
 
-	if builder.Instance.DatabaseSecretProvided() {
-		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
-		volumes = append(volumes, secretVolume)
-		secretVolumeMounts := secretMountsBuilder(dataDirPath)
-		volumeMounts = append(volumeMounts, secretVolumeMounts)
-	}
-
 	if builder.Instance.StartUpPropertiesConfigProvided() {
 		extraServerOpts = builder.convertStartUpPropertiesToServerOptions()
 	}
@@ -105,6 +98,11 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(dataDirPath, extraServerOpts)
 
 	envVars := builder.environmentVariablesBuilder(defaultEnvVars, extraEnvVars)
+
+	if builder.Instance.DatabaseSecretProvided() {
+		databaseEnvVars := builder.databaseEnvVarBuilder()
+		envVars = append(envVars, databaseEnvVars...)
+	}
 
 	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
 
@@ -228,16 +226,34 @@ func (builder *StatefulSetBuilder) volumeMountsBuilder() (volumeMounts []v12.Vol
 	}
 	return
 }
-func secretMountsBuilder(dataDirPath string) v12.VolumeMount {
-	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s%s", dataDirPath, TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH), SubPath: TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}
-}
 
-func databaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
-	return v12.Volume{
-		Name: DATABASE_PROPERTIES_VOLUME_NAME,
-		VolumeSource: v12.VolumeSource{
-			Secret: &v12.SecretVolumeSource{
-				SecretName: databaseSecretName,
+func (builder *StatefulSetBuilder) databaseEnvVarBuilder() []v12.EnvVar {
+	return []v12.EnvVar{
+		{
+			Name: "TEAMCITY_DB_USER",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: builder.Instance.Spec.DatabaseSecret.Secret},
+					Key:                  "connectionProperties.user",
+				},
+			},
+		},
+		{
+			Name: "TEAMCITY_DB_PASSWORD",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: builder.Instance.Spec.DatabaseSecret.Secret},
+					Key:                  "connectionProperties.password",
+				},
+			},
+		},
+		{
+			Name: "TEAMCITY_DB_URL",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: builder.Instance.Spec.DatabaseSecret.Secret},
+					Key:                  "connectionUrl",
+				},
 			},
 		},
 	}
