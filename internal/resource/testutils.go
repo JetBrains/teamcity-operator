@@ -49,6 +49,9 @@ var (
 	}
 	dataDirPVC = CustomPersistentVolumeClaim{
 		Name: dataDirPVCName,
+		Annotations: map[string]string{
+			"data-dir-annotation": "value",
+		},
 		Spec: dataDirPVCSpec,
 		VolumeMount: corev1.VolumeMount{
 			Name:      "default-storage",
@@ -191,6 +194,9 @@ func getInitContainers() []corev1.Container {
 func getAdditionalPVC() CustomPersistentVolumeClaim {
 	return CustomPersistentVolumeClaim{
 		Name: "some-additional-data",
+		Annotations: map[string]string{
+			"pvc-annotations": "value",
+		},
 		VolumeMount: corev1.VolumeMount{
 			Name:      "plugin-data",
 			MountPath: "/storage/plugins",
