@@ -72,6 +72,8 @@ type TeamCitySpec struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
 	Affinity v1.Affinity `json:"affinity,omitempty"`
+
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type DatabaseSecret struct {

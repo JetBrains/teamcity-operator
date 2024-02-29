@@ -108,6 +108,7 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
 	statefulSet.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 
+	statefulSet.Spec.Template.Annotations = builder.Instance.Spec.Annotations
 	statefulSet.Spec.Template.Labels = metadata.Label(builder.Instance.Name)
 	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
 
