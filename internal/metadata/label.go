@@ -5,7 +5,7 @@ type Labels map[string]string
 func getDefaultLabelsFromInstanceName(instanceName string) Labels {
 	return Labels{
 		"app.kubernetes.io/name":      instanceName,
-		"app.kubernetes.io/component": "teamcity",
+		"app.kubernetes.io/component": "teamcity-server",
 		"app.kubernetes.io/part-of":   "teamcity",
 	}
 }
