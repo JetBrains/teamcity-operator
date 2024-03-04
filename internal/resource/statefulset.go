@@ -101,8 +101,9 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	}
 
 	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(desired.Name, desired.Requests.Memory().Value(), dataDirPath, extraServerOpts)
-
 	envVars := builder.environmentVariablesBuilder(defaultEnvVars, desired.Env)
+	podIPEnvVar := builder.podIPEnvVariableBuilder()
+	envVars = append([]v12.EnvVar{podIPEnvVar}, envVars...) //MY_IP var should be specified before options
 	current.Spec.Replicas = pointer.Int32(1)
 	current.Spec.Template.Labels = metadata.GetLabels(desired.Name, builder.Instance.Labels)
 	current.Spec.Template.Spec.SecurityContext = &desired.PodSecurityContext
@@ -181,7 +182,7 @@ func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(nodeName st
 		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", nodeName) +
 			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", nodeName) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", nodeName) +
+			fmt.Sprintf(" -Dteamcity.server.rootURL=http://$(MY_IP)") +
 			extraServerOpts,
 	}
 }
@@ -211,6 +212,17 @@ func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults ma
 		envVars = append(envVars, envVar)
 	}
 	return
+}
+
+func (builder *StatefulSetBuilder) podIPEnvVariableBuilder() v12.EnvVar {
+	return v12.EnvVar{
+		Name: "MY_IP",
+		ValueFrom: &v12.EnvVarSource{
+			FieldRef: &v12.ObjectFieldSelector{
+				FieldPath: "status.podIP",
+			},
+		},
+	}
 }
 
 func (builder *StatefulSetBuilder) volumeMountsBuilder() (volumeMounts []v12.VolumeMount) {
