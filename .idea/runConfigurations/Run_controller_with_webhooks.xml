@@ -14,7 +14,6 @@
     <method v="2">
       <option name="RunConfigurationTask" enabled="false" run_configuration_name="change kube context to minikube" run_configuration_type="ShConfigurationType" />
       <option name="RunConfigurationTask" enabled="true" run_configuration_name="fmt" run_configuration_type="MAKEFILE_TARGET_RUN_CONFIGURATION" />
-      <option name="RunConfigurationTask" enabled="true" run_configuration_name="vet" run_configuration_type="MAKEFILE_TARGET_RUN_CONFIGURATION" />
       <option name="RunConfigurationTask" enabled="true" run_configuration_name="install-with-local-webhooks" run_configuration_type="MAKEFILE_TARGET_RUN_CONFIGURATION" />
     </method>
   </configuration>

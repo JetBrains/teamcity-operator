@@ -75,12 +75,12 @@ func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
 }
 
 func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
-	if err := validateReplicas(teamcity); err != nil {
-		return nil, err
-	}
-	if err := validateRequests(teamcity); err != nil {
-		return nil, err
-	}
+	//if err := validateReplicas(teamcity); err != nil {
+	//	return nil, err
+	//}
+	//if err := validateRequests(teamcity); err != nil {
+	//	return nil, err
+	//}
 	if err := validateXmxPercentage(teamcity); err != nil {
 		return nil, err
 	}
@@ -101,26 +101,26 @@ func validateXmxPercentage(teamcity *TeamCity) (err error) {
 	return nil
 }
 
-func validateReplicas(teamcity *TeamCity) (err error) {
-	if *teamcity.Spec.Replicas > 1 {
-		return typed.ValidationError{
-			Path:         "teamcity.spec.replicas",
-			ErrorMessage: "Replicas value cannot be greater than 1",
-		}
-	}
-	return nil
-}
+//func validateReplicas(teamcity *TeamCity) (err error) {
+//	if *teamcity.Spec.Replicas > 1 {
+//		return typed.ValidationError{
+//			Path:         "teamcity.spec.replicas",
+//			ErrorMessage: "Replicas value cannot be greater than 1",
+//		}
+//	}
+//	return nil
+//}
 
-func validateRequests(teamcity *TeamCity) (err error) {
-	if len(teamcity.Spec.Requests.Memory().String()) <= 0 {
-		return typed.ValidationError{
-			Path:         "teamcity.spec.requests.memory",
-			ErrorMessage: "Requested memory cannot be empty",
-		}
-	}
-	return nil
-
-}
+//func validateRequests(teamcity *TeamCity) (err error) {
+//	if len(teamcity.Spec.Requests.Memory().String()) <= 0 {
+//		return typed.ValidationError{
+//			Path:         "teamcity.spec.requests.memory",
+//			ErrorMessage: "Requested memory cannot be empty",
+//		}
+//	}
+//	return nil
+//
+//}
 
 func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err error) {
 	if err = validateCustomPersistentVolumeClaim("teamcity.spec.dataDirVolumeClaim", teamcity.Spec.DataDirVolumeClaim); err != nil {

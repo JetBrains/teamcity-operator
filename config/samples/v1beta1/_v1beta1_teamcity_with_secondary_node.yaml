@@ -1,0 +1,57 @@
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-secondary-node
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    requests:
+      cpu: "1000m"
+      memory: "2500Mi"
+  secondaryNodes:
+    - name: secondary-node
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+  serviceList:
+    - name: tc-sample-for-ingress
+      spec:
+        selector:
+          app.kubernetes.io/name: teamcity-sample-with-ingress
+          app.kubernetes.io/component: teamcity
+          app.kubernetes.io/part-of: teamcity
+        ports:
+          - protocol: TCP
+            port: 8111
+            targetPort: 8111
+        clusterIP: None
+  ingressList:
+    - name: tc-ingress
+      annotations: { }
+      spec:
+        ingressClassName: nginx
+        rules:
+          - host: tc-sample.myteamcity.com
+            http:
+              paths:
+                - backend:
+                    service:
+                      name: tc-sample
+                      port:
+                        number: 8111
+                  pathType: ImplementationSpecific

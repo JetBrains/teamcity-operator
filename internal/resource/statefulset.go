@@ -2,12 +2,15 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -16,6 +19,7 @@ const (
 	DATABASE_PROPERTIES_VOLUME_NAME         = "database-properties"
 	TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH = "/config/database.properties"
 	TEAMCITY_DATABASE_PROPERTIES_SUB_PATH   = "database.properties"
+	TEAMCITY_CONTAINER_NAME                 = "teamcity-server"
 )
 
 type StatefulSetBuilder struct {
@@ -31,39 +35,28 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
-
-	return []client.Object{
-		&v1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      builder.Instance.Name,
-				Namespace: builder.Instance.Namespace,
-			},
-			Spec: v1.StatefulSetSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: metadata.GetLabelSelector(builder.Instance.Name),
-				},
-
-				Template: v12.PodTemplateSpec{
-					Spec: v12.PodSpec{
-						InitContainers: []v12.Container{},
-						Containers:     []v12.Container{},
-					},
-				},
-			},
-		},
-	}, nil
+	var objectList []client.Object
+	mainNodeLabels := metadata.GetLabels(builder.Instance.Spec.MainNode.Name, builder.Instance.Labels)
+	mainNode := builder.BuildEmptyStatefulSet(builder.Instance.Spec.MainNode.Name, mainNodeLabels)
+	objectList = append(objectList, &mainNode)
+	for _, secondaryNode := range builder.Instance.Spec.SecondaryNodes {
+		nodeLabels := metadata.GetLabels(secondaryNode.Name, builder.Instance.Labels)
+		node := builder.BuildEmptyStatefulSet(secondaryNode.Name, nodeLabels)
+		objectList = append(objectList, &node)
+	}
+	return objectList, nil
 }
 
-func (builder *StatefulSetBuilder) Build() (client.Object, error) {
-	return &v1.StatefulSet{
+func (builder *StatefulSetBuilder) BuildEmptyStatefulSet(statefulSetName string, labels map[string]string) v1.StatefulSet {
+	return v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      builder.Instance.Name,
+			Name:      statefulSetName,
 			Namespace: builder.Instance.Namespace,
-			Labels:    metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels),
+			Labels:    labels,
 		},
 		Spec: v1.StatefulSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: metadata.GetLabelSelector(builder.Instance.Name),
+				MatchLabels: labels,
 			},
 
 			Template: v12.PodTemplateSpec{
@@ -73,15 +66,20 @@ func (builder *StatefulSetBuilder) Build() (client.Object, error) {
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
+	var idx int
 	var volumes []v12.Volume
 	var extraServerOpts string
-	var extraEnvVars = make(map[string]string)
+	nodeList := append(builder.Instance.Spec.SecondaryNodes, builder.Instance.Spec.MainNode)
+	if idx = builder.getNodeIndex(object, nodeList); idx == -1 {
+		return fmt.Errorf("failed to update object: %w", errors.New("the specified StatefulSet does not exist: "+object.GetName()))
+	}
 
-	statefulSet := object.(*v1.StatefulSet)
+	desired := nodeList[idx]
+	current := object.(*v1.StatefulSet)
 
 	volumes = builder.volumeBuilders()
 
@@ -89,7 +87,7 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 
 	dataDirPath := builder.Instance.DataDirPath()
 
-	initContainers := builder.Instance.Spec.InitContainers
+	initContainers := desired.InitContainers
 
 	if builder.Instance.DatabaseSecretProvided() {
 		secretVolume := databaseSecretVolumeBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
@@ -102,24 +100,22 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 		extraServerOpts = builder.convertStartUpPropertiesToServerOptions()
 	}
 
-	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(dataDirPath, extraServerOpts)
+	defaultEnvVars := builder.defaultEnvironmentVariableBuilder(desired.Name, desired.Requests.Memory().Value(), dataDirPath, extraServerOpts)
 
-	envVars := builder.environmentVariablesBuilder(defaultEnvVars, extraEnvVars)
+	envVars := builder.environmentVariablesBuilder(defaultEnvVars, desired.Env)
+	current.Spec.Replicas = pointer.Int32(1)
+	current.Spec.Template.Labels = metadata.GetLabels(desired.Name, builder.Instance.Labels)
+	current.Spec.Template.Spec.SecurityContext = &desired.PodSecurityContext
 
-	statefulSet.Spec.Replicas = builder.Instance.Spec.Replicas
+	current.Spec.Template.Spec.Volumes = volumes
+	current.Spec.Template.Spec.InitContainers = initContainers
 
-	statefulSet.Spec.Template.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
-	statefulSet.Spec.Template.Spec.SecurityContext = &builder.Instance.Spec.PodSecurityContext
+	teamcityContainer := builder.containerSpecBuilder(desired, volumeMounts, envVars)
+	current.Spec.Template.Spec.Containers = []v12.Container{teamcityContainer}
+	current.Spec.Template.Spec.NodeSelector = desired.NodeSelector
+	current.Spec.Template.Spec.Affinity = &desired.Affinity
 
-	statefulSet.Spec.Template.Spec.Volumes = volumes
-	statefulSet.Spec.Template.Spec.InitContainers = initContainers
-
-	teamcityContainer := builder.containerSpecBuilder(volumeMounts, envVars)
-	statefulSet.Spec.Template.Spec.Containers = []v12.Container{teamcityContainer}
-	statefulSet.Spec.Template.Spec.NodeSelector = builder.Instance.Spec.NodeSelector
-	statefulSet.Spec.Template.Spec.Affinity = &builder.Instance.Spec.Affinity
-
-	if err := controllerutil.SetControllerReference(builder.Instance, statefulSet, builder.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(builder.Instance, current, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)
 	}
 	return nil
@@ -129,28 +125,27 @@ func (builder *StatefulSetBuilder) GetObsoleteObjects(ctx context.Context) ([]cl
 	return []client.Object{}, nil
 }
 
-func (builder *StatefulSetBuilder) containerSpecBuilder(volumeMounts []v12.VolumeMount, env []v12.EnvVar) v12.Container {
-	instance := builder.Instance
+func (builder *StatefulSetBuilder) containerSpecBuilder(node Node, volumeMounts []v12.VolumeMount, env []v12.EnvVar) v12.Container {
 	var container = v12.Container{
-		Name:  instance.Name,
-		Image: instance.Spec.Image,
+		Name:  TEAMCITY_CONTAINER_NAME,
+		Image: builder.Instance.Spec.Image,
 	}
 
 	container.ImagePullPolicy = v12.PullIfNotPresent
 
-	container.Ports = append([]v12.ContainerPort{}, instance.Spec.TeamCityServerPort)
+	container.Ports = append([]v12.ContainerPort{}, builder.Instance.Spec.TeamCityServerPort)
 	container.Lifecycle = lifecycleOptionsBuilder()
 
-	container.LivenessProbe = &instance.Spec.LivenessProbeSettings
-	container.ReadinessProbe = &instance.Spec.ReadinessProbeSettings
-	container.StartupProbe = &instance.Spec.StartupProbeSettings
+	container.LivenessProbe = &node.LivenessProbeSettings
+	container.ReadinessProbe = &node.ReadinessProbeSettings
+	container.StartupProbe = &node.StartupProbeSettings
 
-	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
-	container.ReadinessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
-	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
+	container.LivenessProbe.ProbeHandler.HTTPGet = &builder.Instance.Spec.ReadinessEndpoint
+	container.ReadinessProbe.ProbeHandler.HTTPGet = &builder.Instance.Spec.ReadinessEndpoint
+	container.StartupProbe.ProbeHandler.HTTPGet = &builder.Instance.Spec.HealthEndpoint
 
-	container.Resources.Limits = instance.Spec.Limits
-	container.Resources.Requests = instance.Spec.Requests
+	container.Resources.Limits = node.Limits
+	container.Resources.Requests = node.Requests
 
 	container.VolumeMounts = volumeMounts
 
@@ -178,20 +173,20 @@ func lifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
 	return
 }
 
-func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(dataDirPath string, extraServerOpts string) map[string]string {
+func (builder *StatefulSetBuilder) defaultEnvironmentVariableBuilder(nodeName string, memoryValue int64, dataDirPath string, extraServerOpts string) map[string]string {
 	return map[string]string{
-		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(builder.Instance.Spec.XmxPercentage, builder.Instance.Spec.Requests.Memory().Value())),
+		"TEAMCITY_SERVER_MEM_OPTS": fmt.Sprintf("%s%s", "-Xmx", xmxValueCalculator(builder.Instance.Spec.XmxPercentage, memoryValue)),
 		"TEAMCITY_DATA_PATH":       fmt.Sprintf("%s", dataDirPath),
 		"TEAMCITY_LOGS_PATH":       fmt.Sprintf("%s%s", dataDirPath, "/logs"),
 		"TEAMCITY_SERVER_OPTS": "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
-			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", builder.Instance.Name) +
-			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", builder.Instance.Name) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", builder.Instance.Name) +
+			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", nodeName) +
+			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", nodeName) +
+			fmt.Sprintf(" -Dteamcity.server.rootURL=%s", nodeName) +
 			extraServerOpts,
 	}
 }
 
-func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults map[string]string, extraVars map[string]string) (envVars []v12.EnvVar) {
+func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults map[string]string, nodeEnvVars map[string]string) (envVars []v12.EnvVar) {
 
 	// merge with defaults
 	envVars = []v12.EnvVar{}
@@ -200,10 +195,7 @@ func (builder *StatefulSetBuilder) environmentVariablesBuilder(envVarDefaults ma
 	for k, v := range envVarDefaults {
 		mergedMaps[k] = v
 	}
-	for k, v := range builder.Instance.Spec.Env {
-		mergedMaps[k] = v
-	}
-	for k, v := range extraVars {
+	for k, v := range nodeEnvVars {
 		mergedMaps[k] = v
 	}
 
@@ -269,4 +261,13 @@ func (builder *StatefulSetBuilder) volumeBuilders() (volumes []v12.Volume) {
 		)
 	}
 	return
+}
+
+func (builder *StatefulSetBuilder) getNodeIndex(object client.Object, nodeList []Node) int {
+	for idx, ingress := range nodeList {
+		if ingress.Name == object.GetName() {
+			return idx
+		}
+	}
+	return -1
 }
