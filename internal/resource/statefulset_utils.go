@@ -239,3 +239,35 @@ func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
 	}
 	return envVars
 }
+
+func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
+	return []v12.EnvVar{
+		{
+			Name: "TEAMCITY_DB_USER",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
+					Key:                  "connectionProperties.user",
+				},
+			},
+		},
+		{
+			Name: "TEAMCITY_DB_PASSWORD",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
+					Key:                  "connectionProperties.password",
+				},
+			},
+		},
+		{
+			Name: "TEAMCITY_DB_URL",
+			ValueFrom: &v12.EnvVarSource{
+				SecretKeyRef: &v12.SecretKeySelector{
+					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
+					Key:                  "connectionUrl",
+				},
+			},
+		},
+	}
+}

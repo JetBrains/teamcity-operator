@@ -22,6 +22,7 @@ var _ = Describe("PersistentVolumeClaim", func() {
 			actual := obj.(*v12.PersistentVolumeClaim)
 			expected := Instance.Spec.DataDirVolumeClaim
 			Expect(actual.Spec).To(Equal(expected.Spec))
+			Expect(actual.Annotations).To(Equal(expected.Annotations))
 		})
 	})
 
@@ -48,6 +49,7 @@ var _ = Describe("PersistentVolumeClaim", func() {
 			actual = additionalPersistentVolumeClaim.(*v12.PersistentVolumeClaim)
 			expected = Instance.Spec.PersistentVolumeClaims[0]
 			Expect(actual.Spec).To(Equal(expected.Spec))
+			Expect(actual.Annotations).To(Equal(expected.Annotations))
 		})
 	})
 })

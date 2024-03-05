@@ -44,7 +44,7 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 
 	desired := pvcList[idx]
 	persistentVolumeClaim := object.(*v12.PersistentVolumeClaim)
-
+	persistentVolumeClaim.Annotations = desired.Annotations
 	persistentVolumeClaim.Labels = metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
 	persistentVolumeClaim.Spec.AccessModes = desired.Spec.AccessModes
 	persistentVolumeClaim.Spec.Selector = desired.Spec.Selector

@@ -53,9 +53,12 @@ spec:
 #based on database.properties
 apiVersion: v1
 data:
-  database.properties: Y29ubmVjdGlvblVybD1qZGJjOm15c3FsOi8vbXlzcWwuZGVmYXVsdDozMzA2L3RlYW1jaXR5CmNvbm5lY3Rpb25Qcm9wZXJ0aWVzLnVzZXI9cm9vdApjb25uZWN0aW9uUHJvcGVydGllcy5wYXNzd29yZD1wYXNzd29yZApjb25uZWN0aW9uUHJvcGVydGllcy5zb2NrZXRUaW1lb3V0PTkwMDAwMAo=
+  connectionProperties.password: cGFzc3dvcmQ=
+  connectionProperties.user: cm9vdA==
+  connectionUrl: amRiYzpteXNxbDovL215c3FsLmRlZmF1bHQ6MzMwNi90ZWFtY2l0eQ==
 kind: Secret
 metadata:
+  creationTimestamp: "2024-02-29T15:37:06Z"
   name: database-properties
 #---
 #apiVersion: jetbrains.com/v1beta1

@@ -73,6 +73,8 @@ type Node struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
 	Affinity v1.Affinity `json:"affinity,omitempty"`
+
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type DatabaseSecret struct {
@@ -81,6 +83,7 @@ type DatabaseSecret struct {
 
 type CustomPersistentVolumeClaim struct {
 	Name        string                       `json:"name"`
+	Annotations map[string]string            `json:"annotations,omitempty"`
 	VolumeMount v1.VolumeMount               `json:"volumeMount"`
 	Spec        v1.PersistentVolumeClaimSpec `json:"spec"`
 }

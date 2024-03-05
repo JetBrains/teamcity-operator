@@ -71,6 +71,10 @@ spec:
                 type: object
               dataDirVolumeClaim:
                 properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
                   name:
                     type: string
                   spec:
@@ -3555,6 +3559,10 @@ spec:
               persistentVolumeClaims:
                 items:
                   properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      type: object
                     name:
                       type: string
                     spec:

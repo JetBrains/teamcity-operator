@@ -64,7 +64,10 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	defaultEnvVars := DefaultEnvironmentVariableBuilder(mainNode.Name, xmxValue, dataDirPath, extraServerOpts)
 	nodeEnvVars := ConvertNodeEnvVars(mainNode.Env)
 	envVars := append(defaultEnvVars, nodeEnvVars...)
-
+	if builder.Instance.DatabaseSecretProvided() {
+		databaseEnvVars := DatabaseEnvVarBuilder(builder.Instance.Spec.DatabaseSecret.Secret)
+		envVars = append(envVars, databaseEnvVars...)
+	}
 	container.Env = envVars
 	statefulSpec.Spec.Template.Spec.Containers = []v12.Container{container}
 
