@@ -168,29 +168,26 @@ var _ = Describe("StatefulSet", func() {
 			})
 
 		})
-		It("mounts database secret correctly", func() {
+		It("sets env variables correctly", func() {
 			obj, err := DefaultStatefulSetBuilder.Build()
 			Expect(err).NotTo(HaveOccurred())
 			err = DefaultStatefulSetBuilder.Update(obj)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := obj.(*v1.StatefulSet)
+			envVars := statefulSet.Spec.Template.Spec.Containers[0].Env
 
-			volumes := statefulSet.Spec.Template.Spec.Volumes
-			Expect(len(volumes)).To(Equal(2))
+			dbUserIdx := slices.IndexFunc(envVars, func(v v12.EnvVar) bool { return v.Name == "TEAMCITY_DB_USER" })
+			Expect(envVars[dbUserIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(v12.LocalObjectReference{Name: Instance.Spec.DatabaseSecret.Secret}))
+			Expect(envVars[dbUserIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionProperties.user"))
 
-			databaseSecretVolume := volumes[1]
-			Expect(databaseSecretVolume.Name).To(Equal(DATABASE_PROPERTIES_VOLUME_NAME))
-			Expect(databaseSecretVolume.Secret.SecretName).To(Equal(Instance.Spec.DatabaseSecret.Secret))
+			dbPasswordIdx := slices.IndexFunc(envVars, func(v v12.EnvVar) bool { return v.Name == "TEAMCITY_DB_PASSWORD" })
+			Expect(envVars[dbPasswordIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(v12.LocalObjectReference{Name: Instance.Spec.DatabaseSecret.Secret}))
+			Expect(envVars[dbPasswordIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionProperties.password"))
 
-			volumeMounts := statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts
-			Expect(len(volumeMounts)).To(Equal(2))
+			dbURLIdx := slices.IndexFunc(envVars, func(v v12.EnvVar) bool { return v.Name == "TEAMCITY_DB_URL" })
+			Expect(envVars[dbURLIdx].ValueFrom.SecretKeyRef.LocalObjectReference).To(Equal(v12.LocalObjectReference{Name: Instance.Spec.DatabaseSecret.Secret}))
+			Expect(envVars[dbURLIdx].ValueFrom.SecretKeyRef.Key).To(Equal("connectionUrl"))
 
-			databaseSecretVolumeMount := volumeMounts[1]
-			datadirPath := Instance.DataDirPath()
-			datadirPathClean := strings.Replace(datadirPath, "/", "", -1)
-
-			databaseSecretPathSplit := RemoveEmptyStrings(strings.Split(databaseSecretVolumeMount.MountPath, "/"))
-			Expect(databaseSecretPathSplit).To(Equal([]string{datadirPathClean, "config", TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}))
 		})
 	})
 	Context("TeamCity with startup properties", func() {
