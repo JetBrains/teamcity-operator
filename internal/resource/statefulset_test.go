@@ -78,7 +78,7 @@ package resource
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
 //			statefulSet := obj.(*v1.StatefulSet)
-//			xmxValue := xmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
+//			xmxValue := XmxValueCalculator(xmxPercentage, builder.Instance.Spec.Requests.Memory().Value())
 //			datadirPath := Instance.DataDirPath()
 //
 //			dataPath := v12.EnvVar{

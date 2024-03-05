@@ -10,6 +10,13 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+const (
+	DATABASE_PROPERTIES_VOLUME_NAME         = "database-properties"
+	TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH = "/config/database.properties"
+	TEAMCITY_DATABASE_PROPERTIES_SUB_PATH   = "database.properties"
+	TEAMCITY_CONTAINER_NAME                 = "teamcity-server"
+)
+
 func CreateEmptyStatefulSet(name string, namespace string, labels map[string]string) v1.StatefulSet {
 	return v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -73,7 +80,7 @@ func ServerOptsEnvVar(dataDirPath string, nodeName string, extraServerOpts strin
 	}
 }
 
-func xmxValueCalculator(percentage int64, requestedMemoryValue int64) (xmxValue string) {
+func XmxValueCalculator(percentage int64, requestedMemoryValue int64) (xmxValue string) {
 	ratio := float64(percentage) / 100
 	xmxValue = resource.NewQuantity(int64(ratio*float64(requestedMemoryValue)), resource.DecimalSI).String()
 	return
@@ -270,4 +277,18 @@ func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 			},
 		},
 	}
+}
+
+func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node Node) []v12.EnvVar {
+	dataDirPath := instance.DataDirPath()
+	extraServerOpts := ConvertStartUpPropertiesToServerOptions(instance.Spec.StartupPropertiesConfig)
+	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Requests.Memory().Value())
+	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
+	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Env)
+	envVars = append(envVars, nodeSpecificEnvVars...)
+	if instance.DatabaseSecretProvided() {
+		databaseEnvVars := DatabaseEnvVarBuilder(instance.Spec.DatabaseSecret.Secret)
+		envVars = append(envVars, databaseEnvVars...)
+	}
+	return envVars
 }
