@@ -126,6 +126,10 @@ func (instance *TeamCity) DataDirPath() string {
 	return instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath
 }
 
+func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistentVolumeClaim {
+	return append(instance.Spec.PersistentVolumeClaims, instance.Spec.DataDirVolumeClaim)
+}
+
 type Ingress struct {
 	Name        string            `json:"name,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`

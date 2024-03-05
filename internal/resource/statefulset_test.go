@@ -20,14 +20,14 @@ package resource
 //			BeforeEachBuild(func(teamcity *TeamCity) {})
 //		})
 //		It("sets a name and namespace", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			sts := obj.(*v1.StatefulSet)
 //			Expect(sts.Name).To(Equal(TeamCityName))
 //			Expect(sts.Namespace).To(Equal(TeamCityNamespace))
 //		})
 //		It("adds default labels", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			statefulSet := obj.(*v1.StatefulSet)
 //
@@ -37,7 +37,7 @@ package resource
 //			Expect(labels["app.kubernetes.io/part-of"]).To(Equal("teamcity"))
 //		})
 //		It("adds the correct label selector", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			statefulSet := obj.(*v1.StatefulSet)
 //
@@ -47,7 +47,7 @@ package resource
 //			Expect(labels["app.kubernetes.io/part-of"]).To(Equal("teamcity"))
 //		})
 //		It("sets required resources requests for container", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -63,7 +63,7 @@ package resource
 //			Expect(actual).To(Equal(expected))
 //		})
 //		It("sets prestop command for container", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -73,7 +73,7 @@ package resource
 //			Expect(actual).To(Equal(expected))
 //		})
 //		It("calculates and provides env vars correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -118,7 +118,7 @@ package resource
 //			Expect(statefulSet.OwnerReferences[0].Name).To(Equal(builder.Instance.Name))
 //		})
 //		It("creates data dir volume and volume mount", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //
 //			statefulSet := obj.(*v1.StatefulSet)
@@ -143,7 +143,7 @@ package resource
 //			})
 //		})
 //		It("adds init containers", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -170,7 +170,7 @@ package resource
 //
 //		})
 //		It("mounts database secret correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -201,7 +201,7 @@ package resource
 //			})
 //		})
 //		It("sets serveropts correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -232,7 +232,7 @@ package resource
 //			})
 //		})
 //		It("sets additional volumes correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -249,7 +249,7 @@ package resource
 //			})
 //		})
 //		It("sets node selector terms correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -264,7 +264,7 @@ package resource
 //			})
 //		})
 //		It("sets affinity correctly", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -287,7 +287,7 @@ package resource
 //			})
 //		})
 //		It("sets labels correctly in StatefulSet spec", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
@@ -299,7 +299,7 @@ package resource
 //			Expect(statefulSetLabels["teamcity"]).To(Equal(expectedLabels["teamcity"]))
 //		})
 //		It("does not allow a label with existing key to override default label", func() {
-//			obj, err := DefaultStatefulSetBuilder.BuildEmptyStatefulSet()
+//			obj, err := DefaultStatefulSetBuilder.CreateEmptyStatefulSet()
 //			Expect(err).NotTo(HaveOccurred())
 //			err = DefaultStatefulSetBuilder.Update(obj)
 //			Expect(err).NotTo(HaveOccurred())
