@@ -34,17 +34,10 @@ func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	statefulSpec := object.(*v1.StatefulSet)
 	mainNode := builder.Instance.Spec.MainNode
 
-	statefulSpec.Spec.Template.Labels = metadata.GetLabels(mainNode.Name, builder.Instance.Labels)
-	ConfigureStatefulSetWithDefaultSettings(statefulSpec)
-	ConfigureStatefulSetWithNodeSettings(mainNode, statefulSpec)
-	ConfigureStatefulSetWithGlobalSettings(builder.Instance, statefulSpec)
+	ConfigureStatefulSet(builder.Instance, mainNode, statefulSpec)
 
 	var container v12.Container
-	ConfigureContainerWithDefaultSettings(&container)
-	ConfigureContainerWithNodeSettings(mainNode, &container)
-	ConfigureContainerWithGlobalSettings(builder.Instance, &container)
-	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(builder.Instance, mainNode)
-	container.Env = envVars
+	ConfigureContainer(builder.Instance, mainNode, &container)
 
 	statefulSpec.Spec.Template.Spec.Containers = []v12.Container{container}
 

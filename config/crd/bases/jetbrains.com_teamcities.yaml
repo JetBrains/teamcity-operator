@@ -1553,6 +1553,10 @@ spec:
                             type: array
                         type: object
                     type: object
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
                   env:
                     additionalProperties:
                       type: string
@@ -4751,6 +4755,10 @@ spec:
                                 type: object
                               type: array
                           type: object
+                      type: object
+                    annotations:
+                      additionalProperties:
+                        type: string
                       type: object
                     env:
                       additionalProperties:

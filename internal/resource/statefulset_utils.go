@@ -3,6 +3,7 @@ package resource
 import (
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -99,46 +100,6 @@ func LifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
 	return
 }
 
-func EnvironmentVariablesBuilder(envVarDefaults map[string]string, nodeEnvVars map[string]string) (envVars []v12.EnvVar) {
-
-	// merge with defaults
-	envVars = []v12.EnvVar{}
-	podIPEnvVar := PodIPEnvVariableBuilder()
-
-	envVars = append(envVars, podIPEnvVar)
-	mergedMaps := make(map[string]string)
-	for k, v := range envVarDefaults {
-		mergedMaps[k] = v
-	}
-	for k, v := range nodeEnvVars {
-		mergedMaps[k] = v
-	}
-
-	//if we don't sort keys we might produce a different env variable array each time
-	keys := SortKeysAlphabeticallyInMap(mergedMaps)
-
-	for _, k := range keys {
-		var envVar = v12.EnvVar{
-			Name:      k,
-			Value:     mergedMaps[k],
-			ValueFrom: nil,
-		}
-		envVars = append(envVars, envVar)
-	}
-	return
-}
-
-func DatabaseSecretVolumeBuilder(databaseSecretName string) v12.Volume {
-	return v12.Volume{
-		Name: DATABASE_PROPERTIES_VOLUME_NAME,
-		VolumeSource: v12.VolumeSource{
-			Secret: &v12.SecretVolumeSource{
-				SecretName: databaseSecretName,
-			},
-		},
-	}
-}
-
 func ConvertStartUpPropertiesToServerOptions(startupProperties map[string]string) (res string) {
 	sortedKeys := SortKeysAlphabeticallyInMap(startupProperties)
 	for _, k := range sortedKeys {
@@ -189,11 +150,16 @@ func createVolumeMountFromCustomPersistentVolumeClaim(persistentVolumeClaim Cust
 func SecretMountsBuilder(dataDirPath string) v12.VolumeMount {
 	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s%s", dataDirPath, TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH), SubPath: TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}
 }
-func ConfigureContainerWithGlobalSettings(instance *TeamCity, container *v12.Container) {
+func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container) {
 	container.Name = TEAMCITY_CONTAINER_NAME
 	container.Image = instance.Spec.Image
 	container.ImagePullPolicy = v12.PullIfNotPresent
-	container.ImagePullPolicy = v12.PullIfNotPresent
+
+	container.LivenessProbe = &node.LivenessProbeSettings
+	container.ReadinessProbe = &node.ReadinessProbeSettings
+	container.StartupProbe = &node.StartupProbeSettings
+	container.Resources.Limits = node.Limits
+	container.Resources.Requests = node.Limits
 
 	container.Ports = []v12.ContainerPort{instance.Spec.TeamCityServerPort}
 	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
@@ -202,37 +168,21 @@ func ConfigureContainerWithGlobalSettings(instance *TeamCity, container *v12.Con
 	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
 	volumeMounts := BuildVolumeMountsFromPersistentVolumeClaims(allPersistentVolumeClaims)
 	container.VolumeMounts = volumeMounts
+	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
+	container.Env = envVars
 
 }
 
-func ConfigureContainerWithNodeSettings(node Node, container *v12.Container) {
-	container.ImagePullPolicy = v12.PullIfNotPresent
-	container.LivenessProbe = &node.LivenessProbeSettings
-	container.ReadinessProbe = &node.ReadinessProbeSettings
-	container.StartupProbe = &node.StartupProbeSettings
-	container.Resources.Limits = node.Limits
-	container.Resources.Requests = node.Limits
-}
-
-func ConfigureStatefulSetWithNodeSettings(node Node, current *v1.StatefulSet) {
+func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet) {
+	current.Spec.Template.Labels = metadata.GetLabels(node.Name, instance.Labels)
+	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
+	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
+	current.Spec.Replicas = pointer.Int32(1)
+	current.Spec.Template.Spec.Volumes = volumes
 	current.Spec.Template.Spec.InitContainers = node.InitContainers
 	current.Spec.Template.Spec.NodeSelector = node.NodeSelector
 	current.Spec.Template.Spec.Affinity = &node.Affinity
 	current.Spec.Template.Spec.SecurityContext = &node.PodSecurityContext
-}
-
-func ConfigureStatefulSetWithGlobalSettings(instance *TeamCity, current *v1.StatefulSet) {
-	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
-	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
-	current.Spec.Template.Spec.Volumes = volumes
-}
-
-func ConfigureContainerWithDefaultSettings(container *v12.Container) {
-	container.Lifecycle = LifecycleOptionsBuilder()
-}
-
-func ConfigureStatefulSetWithDefaultSettings(current *v1.StatefulSet) {
-	current.Spec.Replicas = pointer.Int32(1)
 }
 
 func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
