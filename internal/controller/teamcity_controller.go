@@ -27,6 +27,7 @@ import (
 	v12 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,6 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"strconv"
+	"time"
 )
 
 const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
@@ -98,6 +101,13 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if _, err := r.reconcileDelete(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
+		if preconditionSuccess := r.validatePreconditions(ctx, builder, teamcity); !preconditionSuccess {
+			log.V(1).Info("Preconditions are not satisfied")
+			//we want to retry reconcile after preconditions will be met
+			//RequeueAfter is specified in nanoseconds :melting_face
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+		}
+
 		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -165,4 +175,27 @@ func (r *TeamcityReconciler) reconcileDelete(ctx context.Context, builder resour
 		log.V(1).Info(fmt.Sprintf("Obsolete object %s %s was deleted", object.GetObjectKind().GroupVersionKind().Kind, object.GetName()))
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder resource.ResourceBuilder, instance TeamCity) (preconditionSuccessful bool) {
+	log := log.FromContext(ctx)
+	preconditionSuccessful = true
+
+	switch builder.(type) {
+	case *resource.SecondaryStatefulSetBuilder:
+		if len(instance.Spec.SecondaryNodes) != 0 {
+			log.V(1).Info("Checking if the main node has started before starting secondary nodes")
+			mainNodeNamespacedName := types.NamespacedName{
+				Namespace: instance.Namespace,
+				Name:      instance.Spec.MainNode.Name,
+			}
+			healthy, err := IsNodeHealthy(r, ctx, mainNodeNamespacedName)
+			if err != nil {
+				log.V(1).Error(err, "Unable to get health of the main node")
+			}
+			log.V(1).Info(fmt.Sprintf("Main node started: %s", strconv.FormatBool(healthy)))
+			preconditionSuccessful = healthy
+		}
+	}
+	return preconditionSuccessful
 }

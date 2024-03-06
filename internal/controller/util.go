@@ -3,18 +3,10 @@ package controller
 import (
 	"context"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
-	v12 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 )
-
-func GetSecretE(r *TeamcityReconciler, ctx context.Context, secretName string, namespace string) (secret v12.Secret, err error) {
-	secretNamespacedName := types.NamespacedName{Namespace: namespace, Name: secretName}
-	if err = r.Get(ctx, secretNamespacedName, &secret); err != nil {
-		return secret, err
-	}
-	return secret, nil
-}
 
 func GetTeamCityObjectE(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (teamcity TeamCity, err error) {
 	if err := r.Get(ctx, namespacedName, &teamcity); err != nil {
@@ -37,4 +29,19 @@ func UpdateTeamCityObjectStatusE(r *TeamcityReconciler, ctx context.Context, nam
 		}
 	}
 	return nil
+}
+
+func GetStatefulSetByName(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (statefulSet v1.StatefulSet, error error) {
+	if err := r.Get(ctx, namespacedName, &statefulSet); err != nil {
+		return statefulSet, err
+	}
+	return statefulSet, nil
+}
+
+func IsNodeHealthy(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (bool bool, err error) {
+	var statefulSet v1.StatefulSet
+	if statefulSet, err = GetStatefulSetByName(r, ctx, namespacedName); err != nil {
+		return false, err
+	}
+	return statefulSet.Status.ReadyReplicas == int32(1), err
 }
