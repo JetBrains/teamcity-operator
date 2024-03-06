@@ -23,7 +23,7 @@ func (builder *StatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
 }
 
 func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
-	mainNodeLabels := metadata.GetLabels(builder.Instance.Spec.MainNode.Name, builder.Instance.Labels)
+	mainNodeLabels := metadata.GetStatefulSetLabels(builder.Instance.Name, builder.Instance.Spec.MainNode.Name, "main", builder.Instance.Labels)
 	mainNode := CreateEmptyStatefulSet(builder.Instance.Spec.MainNode.Name, builder.Instance.Namespace, mainNodeLabels)
 	return []client.Object{
 		&mainNode,
@@ -32,8 +32,8 @@ func (builder *StatefulSetBuilder) BuildObjectList() ([]client.Object, error) {
 
 func (builder *StatefulSetBuilder) Update(object client.Object) error {
 	statefulSpec := object.(*v1.StatefulSet)
-	mainNode := builder.Instance.Spec.MainNode
 
+	mainNode := builder.Instance.Spec.MainNode
 	ConfigureStatefulSet(builder.Instance, mainNode, statefulSpec)
 
 	var container v12.Container
