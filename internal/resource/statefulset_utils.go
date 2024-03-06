@@ -3,7 +3,6 @@ package resource
 import (
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
-	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,6 +30,7 @@ func CreateEmptyStatefulSet(name string, namespace string, labels map[string]str
 			},
 
 			Template: v12.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: v12.PodSpec{
 					InitContainers: []v12.Container{},
 					Containers:     []v12.Container{},
@@ -174,7 +174,6 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 }
 
 func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet) {
-	current.Spec.Template.Labels = metadata.GetLabels(node.Name, instance.Labels)
 	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
 	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
 	current.Spec.Replicas = pointer.Int32(1)

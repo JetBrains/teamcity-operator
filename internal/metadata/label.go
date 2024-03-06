@@ -37,7 +37,7 @@ func getNodeLabels(nodeName string, nodeRole string) Labels {
 }
 
 func mergeLabels(l1 Labels, l2 Labels) Labels {
-	var merged Labels
+	var merged = make(Labels)
 	for k, v := range l1 {
 		merged[k] = v
 	}
