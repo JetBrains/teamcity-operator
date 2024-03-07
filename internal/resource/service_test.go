@@ -47,7 +47,7 @@ var _ = Describe("Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(obsoleteObjects)).To(Equal(1))
-			Expect(obsoleteObjects[0].GetName()).To(Equal(staleServiceName))
+			Expect(obsoleteObjects[0].GetName()).To(Equal(StaleServiceName))
 		})
 	})
 })
@@ -75,7 +75,7 @@ func (m *serviceK8sClientMock) List(_ context.Context, list client.ObjectList, _
 		Spec: v12.ServiceSpec{},
 	}, v12.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: staleServiceName,
+			Name: StaleServiceName,
 		},
 		Spec: v12.ServiceSpec{},
 	})

@@ -72,7 +72,7 @@ var (
 	ingressNameFirst     = TeamCityName + "-ingress-first"
 	ingressNameSecondary = TeamCityName + "-ingress-secondary"
 
-	staleServiceName = "StaleService"
+	StaleServiceName = "StaleService"
 )
 
 func BeforeEachBuild(modify ResourceModifier) {
