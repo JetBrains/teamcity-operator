@@ -15,7 +15,7 @@ var _ = Describe("Service", func() {
 	Context("TeamCity with service", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
-				DefaultClient = &k8sClientMock{}
+				DefaultClient = &serviceK8sClientMock{}
 				teamcity.Spec.ServiceList = getServiceList()
 			})
 		})
@@ -52,15 +52,11 @@ var _ = Describe("Service", func() {
 	})
 })
 
-var (
-	staleServiceName = "StaleService"
-)
-
-type k8sClientMock struct {
+type serviceK8sClientMock struct {
 	client.Client
 }
 
-func (m *k8sClientMock) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+func (m *serviceK8sClientMock) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
 	listService, ok := list.(*v12.ServiceList)
 	if !ok {
 		return fmt.Errorf("unable to convert object list to service list")
