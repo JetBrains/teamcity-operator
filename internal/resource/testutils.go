@@ -30,6 +30,10 @@ var (
 	DefaultIngressBuilder               *IngressBuilder
 	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
 
+	StaleServiceName = "StaleService"
+	StalePvcName     = "StalePvc"
+	StaleIngressName = "StaleIngress"
+
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
 	teamCityReplicas = int32(0)
@@ -71,8 +75,6 @@ var (
 
 	ingressNameFirst     = TeamCityName + "-ingress-first"
 	ingressNameSecondary = TeamCityName + "-ingress-secondary"
-
-	StaleServiceName = "StaleService"
 )
 
 func BeforeEachBuild(modify ResourceModifier) {
