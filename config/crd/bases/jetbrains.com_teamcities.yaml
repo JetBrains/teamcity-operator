@@ -3399,6 +3399,10 @@ spec:
                     description: ResourceList is a set of (resource name, quantity)
                       pairs.
                     type: object
+                  responsibilities:
+                    items:
+                      type: string
+                    type: array
                   startupProbeSettings:
                     default:
                       failureThreshold: 15
@@ -6638,6 +6642,10 @@ spec:
                       description: ResourceList is a set of (resource name, quantity)
                         pairs.
                       type: object
+                    responsibilities:
+                      items:
+                        type: string
+                      type: array
                     startupProbeSettings:
                       default:
                         failureThreshold: 15

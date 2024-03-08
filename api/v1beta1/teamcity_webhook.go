@@ -24,7 +24,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
+	"strings"
 )
+
+var allTeamCityResponsibilities = []string{
+	"MAIN_NODE",
+	"CAN_PROCESS_BUILD_MESSAGES",
+	"CAN_CHECK_FOR_CHANGES",
+	"CAN_PROCESS_BUILD_TRIGGERS",
+	"CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS",
+}
+
+var minimumRequiredMainNodeResponsibilities = []string{
+	"MAIN_NODE",
+	"CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS",
+}
+var validSecondaryNodeResponsibilities = []string{
+	"CAN_PROCESS_BUILD_MESSAGES",
+	"CAN_CHECK_FOR_CHANGES",
+	"CAN_PROCESS_BUILD_TRIGGERS",
+	"CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS",
+}
+var validMainNodeResponsibilities = append(validSecondaryNodeResponsibilities, "MAIN_NODE")
 
 // log is for logging in this package.
 var teamcitylog = logf.Log.WithName("teamcity-resource")
@@ -61,10 +82,11 @@ func (r *TeamCity) ValidateCreate() (admission.Warnings, error) {
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	teamcitylog.Info("validate update", "name", r.Name)
-	if warn, err := validateCommonFields(r); err != nil {
-		return warn, err
+	warn, err := validateCommonFields(r)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	return warn, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -76,10 +98,10 @@ func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
 
 func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	//if err := validateReplicas(teamcity); err != nil {
-	//	return nil, err
+	//	return warnings, err
 	//}
 	//if err := validateRequests(teamcity); err != nil {
-	//	return nil, err
+	//	return warnings, err
 	//}
 	if err := validateXmxPercentage(teamcity); err != nil {
 		return nil, err
@@ -87,7 +109,9 @@ func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateAllCustomPersistentVolumeClaimsInObject(teamcity); err != nil {
 		return nil, err
 	}
-
+	if responsibilityWarning, err := validateResponsibilitiesOfAllNodes(teamcity); err != nil || responsibilityWarning != "" {
+		return admission.Warnings{responsibilityWarning}, err
+	}
 	return nil, nil
 }
 
@@ -162,4 +186,113 @@ func validateCustomPersistentVolumeClaim(objectPath string, claim CustomPersiste
 	}
 
 	return nil
+}
+
+func validateResponsibilitiesOfAllNodes(teamcity *TeamCity) (warning string, err error) {
+	//it is allowed to have empty responsibilities for all nodes
+	if allNodesHaveEmptyResponsibility(teamcity.Spec.MainNode, teamcity.Spec.SecondaryNodes) {
+		return "", nil
+	}
+
+	//if responsibilities are specified for at least one node, we need to check all of them
+	if err = validateMainNodeResponsibilities("teamcity.spec.mainNode", teamcity.Spec.MainNode, validMainNodeResponsibilities, minimumRequiredMainNodeResponsibilities); err != nil {
+		return "", err
+	}
+	for idx, secondaryNode := range teamcity.Spec.SecondaryNodes {
+		if err = validateNodeResponsibilities(fmt.Sprintf("teamcity.spec.secondaryNode[%d]", idx), secondaryNode, validSecondaryNodeResponsibilities); err != nil {
+			return "", err
+		}
+	}
+
+	//make sure that all responsibilities are assigned
+	if warning := validatePresenceOfAllResponsibilities(allTeamCityResponsibilities, teamcity.Spec.MainNode, teamcity.Spec.SecondaryNodes); warning != "" {
+		return warning, err
+	}
+	return "", nil
+}
+
+func validatePresenceOfAllResponsibilities(allResponsibilities []string, mainNode Node, secondaryNodes []Node) string {
+	responsibilities := getAllResponsibilitiesFromAllNodes(mainNode, secondaryNodes)
+	if !allElementsInOtherSlice(allResponsibilities, responsibilities) {
+		return fmt.Sprintf("Not all responsibilities are distributed across the nodes. This may impact functionality of the server. Make sure that the following responsibilities are present in configuration %s", strings.Join(allResponsibilities, ", "))
+	}
+	return ""
+}
+func allNodesHaveEmptyResponsibility(mainNode Node, secondaryNodes []Node) bool {
+	responsibilities := getAllResponsibilitiesFromAllNodes(mainNode, secondaryNodes)
+	return len(responsibilities) == 0
+}
+
+func getAllResponsibilitiesFromAllNodes(mainNode Node, secondaryNodes []Node) []string {
+	responsibilities := []string{}
+	responsibilities = append(responsibilities, mainNode.Responsibilities...)
+	for _, secondaryNode := range secondaryNodes {
+		responsibilities = append(responsibilities, secondaryNode.Responsibilities...)
+	}
+	return responsibilities
+}
+
+func validateMainNodeResponsibilities(objectPath string, node Node, validResponsibilities []string, requiredResponsibilities []string) error {
+	responsibilities := node.Responsibilities
+	if len(responsibilities) < 1 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
+			ErrorMessage: fmt.Sprintf("Main node cannot have empty responsibilities. Minimum required values are: %s. Valid values are: %s.", strings.Join(requiredResponsibilities, ", "), strings.Join(validResponsibilities, ", ")),
+		}
+	}
+	if !areAllElementsAllowed(responsibilities, validResponsibilities) {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
+			ErrorMessage: fmt.Sprintf("Main node does not have valid responsibilities. Minimum required values are: %s. Valid values are: %s", strings.Join(requiredResponsibilities, ", "), strings.Join(validResponsibilities, ", ")),
+		}
+	}
+	if !allElementsInOtherSlice(requiredResponsibilities, responsibilities) {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
+			ErrorMessage: fmt.Sprintf("Main node does not have required responsibilities. Minimum required values are: %s", strings.Join(requiredResponsibilities, ", ")),
+		}
+	}
+
+	return nil
+}
+
+func validateNodeResponsibilities(objectPath string, node Node, validResponsibilities []string) error {
+	responsibilities := node.Responsibilities
+	if !areAllElementsAllowed(responsibilities, validResponsibilities) {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
+			ErrorMessage: fmt.Sprintf("Secondary node does not contain valid responsibilities. Valid values are: %s", strings.Join(validResponsibilities, ", ")),
+		}
+	}
+
+	return nil
+}
+
+func areAllElementsAllowed(elements []string, allowed []string) bool {
+	allowedMap := make(map[string]bool, len(allowed))
+	for _, v := range allowed {
+		allowedMap[v] = true
+	}
+
+	for _, e := range elements {
+		if _, isAllowed := allowedMap[e]; !isAllowed {
+			return false
+		}
+	}
+
+	return true
+}
+
+func allElementsInOtherSlice(slice1 []string, slice2 []string) bool {
+	m := make(map[string]bool, len(slice2))
+	for _, item := range slice2 {
+		m[item] = true
+	}
+
+	for _, item := range slice1 {
+		if _, found := m[item]; !found {
+			return false
+		}
+	}
+	return true
 }

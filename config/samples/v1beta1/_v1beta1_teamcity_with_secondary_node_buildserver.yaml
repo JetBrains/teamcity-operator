@@ -32,35 +32,23 @@ spec:
       memory: "2500Mi"
     responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
   secondaryNodes:
-    - name: secondary-node
+    - name: secondary-node-0
       requests:
         cpu: "1000m"
         memory: "2500Mi"
       responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
-  serviceList:
-    - name: tc-sample-for-ingress
-      spec:
-        selector:
-          app.kubernetes.io/name: teamcity-sample-with-ingress
-          app.kubernetes.io/component: teamcity
-          app.kubernetes.io/part-of: teamcity
-        ports:
-          - protocol: TCP
-            port: 8111
-            targetPort: 8111
-        clusterIP: None
-  ingressList:
-    - name: tc-ingress
-      annotations: { }
-      spec:
-        ingressClassName: nginx
-        rules:
-          - host: tc-sample.myteamcity.com
-            http:
-              paths:
-                - backend:
-                    service:
-                      name: tc-sample
-                      port:
-                        number: 8111
-                  pathType: ImplementationSpecific
+    - name: secondary-node-1
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: [ "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
+    - name: secondary-node-2
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+    - name: secondary-node-3
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]

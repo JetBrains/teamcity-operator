@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+	"strings"
 )
 
 const (
@@ -231,6 +232,11 @@ func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node Node) []v12.EnvVar {
 	dataDirPath := instance.DataDirPath()
 	extraServerOpts := ConvertStartUpPropertiesToServerOptions(instance.Spec.StartupPropertiesConfig)
+	var responsibilities string
+	if len(node.Responsibilities) > 0 {
+		responsibilities = ConvertResponsibilitiesToServerOptions(node.Responsibilities)
+	}
+	extraServerOpts = extraServerOpts + responsibilities
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
 	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Env)
@@ -240,4 +246,10 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 		envVars = append(envVars, databaseEnvVars...)
 	}
 	return envVars
+}
+
+func ConvertResponsibilitiesToServerOptions(responsibilities []string) string {
+	stringResponsibilities := strings.Join(responsibilities, ",")
+	return fmt.Sprintf(" -Dteamcity.server.responsibilities=%s", stringResponsibilities)
+
 }
