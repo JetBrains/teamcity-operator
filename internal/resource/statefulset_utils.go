@@ -156,11 +156,11 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.Image = instance.Spec.Image
 	container.ImagePullPolicy = v12.PullIfNotPresent
 
-	container.LivenessProbe = &node.LivenessProbeSettings
-	container.ReadinessProbe = &node.ReadinessProbeSettings
-	container.StartupProbe = &node.StartupProbeSettings
-	container.Resources.Limits = node.Limits
-	container.Resources.Requests = node.Limits
+	container.LivenessProbe = &node.Spec.LivenessProbeSettings
+	container.ReadinessProbe = &node.Spec.ReadinessProbeSettings
+	container.StartupProbe = &node.Spec.StartupProbeSettings
+	container.Resources.Limits = node.Spec.Limits
+	container.Resources.Requests = node.Spec.Limits
 
 	container.Ports = []v12.ContainerPort{instance.Spec.TeamCityServerPort}
 	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
@@ -179,10 +179,10 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
 	current.Spec.Replicas = pointer.Int32(1)
 	current.Spec.Template.Spec.Volumes = volumes
-	current.Spec.Template.Spec.InitContainers = node.InitContainers
-	current.Spec.Template.Spec.NodeSelector = node.NodeSelector
-	current.Spec.Template.Spec.Affinity = &node.Affinity
-	current.Spec.Template.Spec.SecurityContext = &node.PodSecurityContext
+	current.Spec.Template.Spec.InitContainers = node.Spec.InitContainers
+	current.Spec.Template.Spec.NodeSelector = node.Spec.NodeSelector
+	current.Spec.Template.Spec.Affinity = &node.Spec.Affinity
+	current.Spec.Template.Spec.SecurityContext = &node.Spec.PodSecurityContext
 }
 
 func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
@@ -233,13 +233,13 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	dataDirPath := instance.DataDirPath()
 	extraServerOpts := ConvertStartUpPropertiesToServerOptions(instance.Spec.StartupPropertiesConfig)
 	var responsibilities string
-	if len(node.Responsibilities) > 0 {
-		responsibilities = ConvertResponsibilitiesToServerOptions(node.Responsibilities)
+	if len(node.Spec.Responsibilities) > 0 {
+		responsibilities = ConvertResponsibilitiesToServerOptions(node.Spec.Responsibilities)
 	}
 	extraServerOpts = extraServerOpts + responsibilities
-	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Requests.Memory().Value())
+	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
-	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Env)
+	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Spec.Env)
 	envVars = append(envVars, nodeSpecificEnvVars...)
 	if instance.DatabaseSecretProvided() {
 		databaseEnvVars := DatabaseEnvVarBuilder(instance.Spec.DatabaseSecret.Secret)

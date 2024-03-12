@@ -55,8 +55,7 @@ type TeamCitySpec struct {
 	IngressList []Ingress `json:"ingressList,omitempty"`
 }
 
-type Node struct {
-	Name           string            `json:"name"`
+type NodeSpec struct {
 	InitContainers []v1.Container    `json:"initContainers,omitempty"`
 	Requests       v1.ResourceList   `json:"requests"` // mandatory, since we rely on it with Xmx setup
 	Env            map[string]string `json:"env,omitempty"`
@@ -77,6 +76,12 @@ type Node struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 
 	Responsibilities []string `json:"responsibilities,omitempty"`
+}
+
+type Node struct {
+	Name        string            `json:"name"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Spec        NodeSpec          `json:"spec"`
 }
 
 type DatabaseSecret struct {

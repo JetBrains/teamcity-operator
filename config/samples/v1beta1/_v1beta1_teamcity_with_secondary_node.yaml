@@ -1,6 +1,9 @@
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
+  labels:
+    app.kubernetes.io/name: teamcity #this labels will be ignored because it tries to override a default one
+    foo: bar #this custom label will be applied
   name: teamcity-sample-with-secondary-node
   namespace: default
   finalizers:
@@ -27,40 +30,21 @@ spec:
           storage: 1Gi
   mainNode:
     name: main-node
-    requests:
-      cpu: "1000m"
-      memory: "2500Mi"
-    responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
-  secondaryNodes:
-    - name: secondary-node
+    spec:
       requests:
         cpu: "1000m"
         memory: "2500Mi"
-      responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
-  serviceList:
-    - name: tc-sample-for-ingress
+      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+  secondaryNodes:
+    - name: secondary-node
       spec:
-        selector:
-          app.kubernetes.io/name: teamcity-sample-with-ingress
-          app.kubernetes.io/component: teamcity
-          app.kubernetes.io/part-of: teamcity
-        ports:
-          - protocol: TCP
-            port: 8111
-            targetPort: 8111
-        clusterIP: None
-  ingressList:
-    - name: tc-ingress
-      annotations: { }
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+    - name: secondary-node-1
       spec:
-        ingressClassName: nginx
-        rules:
-          - host: tc-sample.myteamcity.com
-            http:
-              paths:
-                - backend:
-                    service:
-                      name: tc-sample
-                      port:
-                        number: 8111
-                  pathType: ImplementationSpecific
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]

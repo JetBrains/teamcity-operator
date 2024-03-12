@@ -225,15 +225,15 @@ func allNodesHaveEmptyResponsibility(mainNode Node, secondaryNodes []Node) bool 
 
 func getAllResponsibilitiesFromAllNodes(mainNode Node, secondaryNodes []Node) []string {
 	responsibilities := []string{}
-	responsibilities = append(responsibilities, mainNode.Responsibilities...)
+	responsibilities = append(responsibilities, mainNode.Spec.Responsibilities...)
 	for _, secondaryNode := range secondaryNodes {
-		responsibilities = append(responsibilities, secondaryNode.Responsibilities...)
+		responsibilities = append(responsibilities, secondaryNode.Spec.Responsibilities...)
 	}
 	return responsibilities
 }
 
 func validateMainNodeResponsibilities(objectPath string, node Node, validResponsibilities []string, requiredResponsibilities []string) error {
-	responsibilities := node.Responsibilities
+	responsibilities := node.Spec.Responsibilities
 	if len(responsibilities) < 1 {
 		return typed.ValidationError{
 			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
@@ -257,7 +257,7 @@ func validateMainNodeResponsibilities(objectPath string, node Node, validRespons
 }
 
 func validateNodeResponsibilities(objectPath string, node Node, validResponsibilities []string) error {
-	responsibilities := node.Responsibilities
+	responsibilities := node.Spec.Responsibilities
 	if !areAllElementsAllowed(responsibilities, validResponsibilities) {
 		return typed.ValidationError{
 			Path:         fmt.Sprintf("%s.%s", objectPath, "responsibilities"),
