@@ -24,9 +24,27 @@ func GetLabels(instanceName string, instanceLabels map[string]string) Labels {
 }
 
 func GetStatefulSetLabels(instanceName string, nodeName string, nodeRole string, instanceLabels map[string]string) Labels {
+	commonStatefulSetLabels := GetStatefulSetCommonLabels(instanceName, nodeRole, instanceLabels)
+	nodeNameLabel := getNodeNameLabel(nodeName)
+	return mergeLabels(commonStatefulSetLabels, nodeNameLabel)
+}
+
+func GetStatefulSetCommonLabels(instanceName string, nodeRole string, instanceLabels map[string]string) Labels {
 	commonLabels := GetLabels(instanceName, instanceLabels)
-	nodeLabels := getNodeLabels(nodeName, nodeRole)
-	return mergeLabels(commonLabels, nodeLabels)
+	nodeResponsibility := getNodeResponsibilityLabel(nodeRole)
+	return mergeLabels(commonLabels, nodeResponsibility)
+}
+
+func getNodeNameLabel(nodeName string) Labels {
+	return Labels{
+		"teamcity.jetbrains.com/node-name": nodeName,
+	}
+}
+
+func getNodeResponsibilityLabel(nodeRole string) Labels {
+	return Labels{
+		"teamcity.jetbrains.com/role": nodeRole,
+	}
 }
 
 func getNodeLabels(nodeName string, nodeRole string) Labels {

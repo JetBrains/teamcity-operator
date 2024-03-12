@@ -54,7 +54,25 @@ func (builder SecondaryStatefulSetBuilder) Update(object client.Object) error {
 }
 
 func (builder SecondaryStatefulSetBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
-	return nil, nil
+	currentStatefulList := &v1.StatefulSetList{}
+	obsoleteObjects := []client.Object{}
+	secondaryNodeLabels := metadata.GetStatefulSetCommonLabels(builder.Instance.Name, "secondary", builder.Instance.Labels)
+	listOptions := []client.ListOption{
+		client.InNamespace(builder.Instance.Namespace),
+		client.MatchingLabels(secondaryNodeLabels),
+	}
+	if err := builder.Client.List(ctx, currentStatefulList, listOptions...); err != nil {
+		return nil, err
+	}
+	for _, statefulSet := range currentStatefulList.Items {
+		var idx int
+		sts := statefulSet
+		if idx = builder.getNodeIndex(&statefulSet, builder.Instance.Spec.SecondaryNodes); idx == -1 {
+			obsoleteObjects = append(obsoleteObjects, &sts)
+		}
+	}
+	fmt.Printf("Deleting %d \n", len(obsoleteObjects))
+	return obsoleteObjects, nil
 }
 
 func (builder SecondaryStatefulSetBuilder) UpdateMayRequireStsRecreate() bool {
