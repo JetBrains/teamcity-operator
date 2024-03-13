@@ -160,7 +160,7 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.ReadinessProbe = &node.Spec.ReadinessProbeSettings
 	container.StartupProbe = &node.Spec.StartupProbeSettings
 	container.Resources.Limits = node.Spec.Limits
-	container.Resources.Requests = node.Spec.Limits
+	container.Resources.Requests = node.Spec.Requests
 
 	container.Ports = []v12.ContainerPort{instance.Spec.TeamCityServerPort}
 	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
