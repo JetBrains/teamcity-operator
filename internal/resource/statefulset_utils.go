@@ -156,6 +156,7 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.Image = instance.Spec.Image
 	container.ImagePullPolicy = v12.PullIfNotPresent
 
+	container.Lifecycle = LifecycleOptionsBuilder()
 	container.LivenessProbe = &node.Spec.LivenessProbeSettings
 	container.ReadinessProbe = &node.Spec.ReadinessProbeSettings
 	container.StartupProbe = &node.Spec.StartupProbeSettings
