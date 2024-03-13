@@ -71,7 +71,6 @@ func (builder SecondaryStatefulSetBuilder) GetObsoleteObjects(ctx context.Contex
 			obsoleteObjects = append(obsoleteObjects, &sts)
 		}
 	}
-	fmt.Printf("Deleting %d \n", len(obsoleteObjects))
 	return obsoleteObjects, nil
 }
 
