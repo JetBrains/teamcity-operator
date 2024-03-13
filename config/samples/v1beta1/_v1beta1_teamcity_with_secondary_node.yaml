@@ -15,8 +15,6 @@ spec:
     teamcity.licenseAgreement.accepted: "true"
     teamcity.firstStart.setupAdmin.enabled: "false"
     teamcity.superUser.token: "token123"
-  databaseSecret:
-    secret: database-properties
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:

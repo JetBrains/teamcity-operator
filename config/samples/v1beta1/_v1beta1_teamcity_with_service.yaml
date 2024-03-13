@@ -7,23 +7,6 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
-  env:
-    AWS_DEFAULT_REGION: "eu-west-1"
-  requests:
-    cpu: "400m"
-    memory: "1000Mi"
-  dataDirVolumeClaim:
-    name: teamcity-node-volume1
-    volumeMount:
-      name: teamcity-node-volume1
-      mountPath: /storage
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
   persistentVolumeClaims:
     - name: teamcity-node-config-dir
       volumeMount:
@@ -40,10 +23,29 @@ spec:
       spec:
         selector:
           app.kubernetes.io/name: teamcity-sample-with-svc
-          app.kubernetes.io/component: teamcity
+          app.kubernetes.io/component: teamcity-server
           app.kubernetes.io/part-of: teamcity
         ports:
           - protocol: TCP
             port: 8111
             targetPort: 8111
         clusterIP: None
+  mainNode:
+    name: node
+    spec:
+      env:
+        AWS_DEFAULT_REGION: "eu-west-1"
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi

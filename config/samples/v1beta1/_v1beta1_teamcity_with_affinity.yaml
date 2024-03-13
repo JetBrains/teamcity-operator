@@ -7,10 +7,29 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
-  requests:
-    cpu: "400m"
-    memory: "1000Mi"
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - arm64
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/os
+                    operator: In
+                    values:
+                      - linux
   dataDirVolumeClaim:
     name: teamcity-with-affinity-datadir
     volumeMount:
@@ -22,20 +41,3 @@ spec:
       resources:
         requests:
           storage: 1Gi
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
-                values:
-                  - arm64
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 1
-          preference:
-            matchExpressions:
-              - key: kubernetes.io/os
-                operator: In
-                values:
-                  - linux

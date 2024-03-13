@@ -7,12 +7,12 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
-  env:
-    AWS_DEFAULT_REGION: "eu-west-1"
-  requests:
-    cpu: "1000m"
-    memory: "2500Mi"
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:
@@ -24,14 +24,3 @@ spec:
       resources:
         requests:
           storage: 1Gi
-  persistentVolumeClaims:
-    - name: teamcity-node-config-dir
-      volumeMount:
-        name: teamcity-node-config-dir
-        mountPath: /storage/config
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi

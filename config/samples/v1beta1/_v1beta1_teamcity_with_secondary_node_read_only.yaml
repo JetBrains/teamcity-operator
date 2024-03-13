@@ -27,11 +27,13 @@ spec:
           storage: 1Gi
   mainNode:
     name: main-node
-    requests:
-      cpu: "1000m"
-      memory: "2500Mi"
-  secondaryNodes:
-    - name: secondary-node
+    spec:
       requests:
         cpu: "1000m"
         memory: "2500Mi"
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"

@@ -7421,7 +7421,6 @@ spec:
             - dataDirVolumeClaim
             - image
             - mainNode
-            - secondaryNodes
             - xmxPercentage
             type: object
           status:

@@ -32,7 +32,7 @@ type TeamCitySpec struct {
 
 	Image                  string                        `json:"image"`
 	MainNode               Node                          `json:"mainNode"`
-	SecondaryNodes         []Node                        `json:"secondaryNodes"`
+	SecondaryNodes         []Node                        `json:"secondaryNodes,omitempty"`
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 

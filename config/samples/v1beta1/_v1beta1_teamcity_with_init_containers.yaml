@@ -7,19 +7,18 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
-  startupProbeSettings:
-    failureThreshold: 10000
-    initialDelaySeconds: 600
-  initContainers:
-    - name: init-myservice
-      image: busybox:1.28
-      command: [ 'sh', '-c', "echo Hello" ]
-  env:
-    AWS_DEFAULT_REGION: "eu-west-1"
-  requests:
-    cpu: "400m"
-    memory: "1000Mi"
+  mainNode:
+    name: main-node
+    spec:
+      initContainers:
+        - name: init-myservice
+          image: busybox:1.28
+          command: [ 'sh', '-c', "echo Hello" ]
+      env:
+        AWS_DEFAULT_REGION: "eu-west-1"
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:

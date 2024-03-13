@@ -7,15 +7,17 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
   startupPropertiesConfig:
     teamcity.startup.maintenance: "false"
     teamcity.licenseAgreement.accepted: "true"
     teamcity.firstStart.setupAdmin.enabled: "false"
     teamcity.superUser.token: "token123"
-  requests:
-    cpu: "400m"
-    memory: "1000Mi"
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:

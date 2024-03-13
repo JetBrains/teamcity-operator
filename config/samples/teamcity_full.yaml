@@ -53,7 +53,9 @@ spec:
 #based on database.properties
 apiVersion: v1
 data:
-  database.properties: Y29ubmVjdGlvblVybD1qZGJjOm15c3FsOi8vbXlzcWwuZGVmYXVsdDozMzA2L3RlYW1jaXR5CmNvbm5lY3Rpb25Qcm9wZXJ0aWVzLnVzZXI9cm9vdApjb25uZWN0aW9uUHJvcGVydGllcy5wYXNzd29yZD1wYXNzd29yZApjb25uZWN0aW9uUHJvcGVydGllcy5zb2NrZXRUaW1lb3V0PTkwMDAwMAo=
+  connectionProperties.password: cGFzc3dvcmQ=
+  connectionProperties.user: cm9vdA==
+  connectionUrl: amRiYzpteXNxbDovL215c3FsLmRlZmF1bHQ6MzMwNi90ZWFtY2l0eQ==
 kind: Secret
 metadata:
   name: database-properties
@@ -73,7 +75,6 @@ metadata:
     - "teamcity.jetbrains.com/finalizer"
 spec:
   image: jetbrains/teamcity-server
-  replicas: 1
   databaseSecret:
     secret: database-properties
   startupPropertiesConfig:
@@ -81,20 +82,7 @@ spec:
     teamcity.licenseAgreement.accepted: "true"
     teamcity.firstStart.setupAdmin.enabled: "false"
     teamcity.superUser.token: "token123"
-  initContainers:
-    - name: init-myservice
-      image: busybox:1.28
-      command: [ 'sh', '-c', "echo Hello" ]
-  env:
-    AWS_DEFAULT_REGION: "eu-west-1"
-  podSecurityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
   xmxPercentage: 95
-  requests:
-    cpu: "400m"
-    memory: "1000Mi"
   readinessEndpoint:
     path: "/healthCheck/ready"
     scheme: HTTP
@@ -103,28 +91,64 @@ spec:
     path: "/healthCheck/ready"
     scheme: HTTP
     port: 8111
-  livenessProbeSettings:
-    failureThreshold: 3
-    successThreshold: 1
-    periodSeconds: 20
-    initialDelaySeconds: 60
-    timeoutSeconds: 1
-  readinessProbeSettings:
-    failureThreshold: 3
-    successThreshold: 1
-    periodSeconds: 20
-    initialDelaySeconds: 60
-    timeoutSeconds: 1
-  startupProbeSettings:
-    failureThreshold: 3
-    successThreshold: 1
-    periodSeconds: 20
-    initialDelaySeconds: 60
-    timeoutSeconds: 1
+  mainNode:
+    name: main-node
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+    spec:
+      initContainers:
+        - name: init-myservice
+          image: busybox:1.28
+          command: [ 'sh', '-c', "echo Hello" ]
+      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
+      env:
+        AWS_DEFAULT_REGION: "eu-west-1"
+      podSecurityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+      livenessProbeSettings:
+        failureThreshold: 3
+        successThreshold: 1
+        periodSeconds: 20
+        initialDelaySeconds: 60
+        timeoutSeconds: 1
+      readinessProbeSettings:
+        failureThreshold: 3
+        successThreshold: 1
+        periodSeconds: 20
+        initialDelaySeconds: 60
+        timeoutSeconds: 1
+      startupProbeSettings:
+        failureThreshold: 3
+        successThreshold: 1
+        periodSeconds: 20
+        initialDelaySeconds: 60
+        timeoutSeconds: 1
+  secondaryNodes:
+    - name: secondary-node
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+    - name: secondary-node-1
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: [ "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
   dataDirVolumeClaim:
-    name: teamcity-node-volume1
+    name: datadir
     volumeMount:
-      name: teamcity-node-volume1
+      name: datadir
       mountPath: /storage
     spec:
       accessModes:
@@ -133,9 +157,9 @@ spec:
         requests:
           storage: 1Gi
   persistentVolumeClaims:
-    - name: teamcity-node-config-dir
+    - name: additional-volume
       volumeMount:
-        name: teamcity-node-config-dir
+        name: additional-volume
         mountPath: /storage/config
       spec:
         accessModes:
@@ -147,7 +171,7 @@ spec:
     - name: tc-sample
       spec:
         selector:
-          app.kubernetes.io/component: teamcity
+          app.kubernetes.io/component: teamcity-server
           app.kubernetes.io/name: teamcity-sample-full
           app.kubernetes.io/part-of: teamcity
         ports:
