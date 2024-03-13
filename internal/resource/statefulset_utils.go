@@ -178,6 +178,7 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
 	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
 	current.Spec.Replicas = pointer.Int32(1)
+	current.Spec.Template.Annotations = node.Annotations
 	current.Spec.Template.Spec.Volumes = volumes
 	current.Spec.Template.Spec.InitContainers = node.Spec.InitContainers
 	current.Spec.Template.Spec.NodeSelector = node.Spec.NodeSelector

@@ -30,6 +30,8 @@ spec:
           storage: 1Gi
   mainNode:
     name: main-node
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
     spec:
       requests:
         cpu: "1000m"
@@ -37,12 +39,8 @@ spec:
       responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
   secondaryNodes:
     - name: secondary-node
-      spec:
-        requests:
-          cpu: "1000m"
-          memory: "2500Mi"
-        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
-    - name: secondary-node-1
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       spec:
         requests:
           cpu: "1000m"
