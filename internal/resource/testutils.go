@@ -27,6 +27,7 @@ var (
 	DefaultServiceBuilder               *ServiceBuilder
 	DefaultIngressBuilder               *IngressBuilder
 	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
+	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -86,6 +87,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultServiceBuilder = builder.Service()
 	DefaultIngressBuilder = builder.Ingress()
 	DefaultPersistentVolumeClaimBuilder = builder.PersistentVolumeClaim()
+	DefaultSecondaryStatefulSetBuilder = builder.SecondaryStatefulSet()
 }
 
 func getBaseTcInstance() TeamCity {
@@ -291,6 +293,24 @@ func getIngressList() []Ingress {
 					},
 				},
 			},
+		},
+	}
+}
+
+func getSecondaryNodes() []Node {
+	return []Node{
+		getNode("secondary-0", make(map[string]string), requests, []string{"foo"}),
+		getNode("secondary-1", make(map[string]string), requests, []string{"bar"}),
+	}
+}
+
+func getNode(nodeName string, annotations map[string]string, requests corev1.ResourceList, responsibilities []string) Node {
+	return Node{
+		Name:        nodeName,
+		Annotations: annotations,
+		Spec: NodeSpec{
+			Requests:         requests,
+			Responsibilities: responsibilities,
 		},
 	}
 }
