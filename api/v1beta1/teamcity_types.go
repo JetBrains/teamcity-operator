@@ -53,6 +53,8 @@ type TeamCitySpec struct {
 	ServiceList []Service `json:"serviceList,omitempty"`
 	//+kubebuilder:default:={}
 	IngressList []Ingress `json:"ingressList,omitempty"`
+	//+kubebuilder:default:={}
+	ServiceAccount v1.ServiceAccount `json:"serviceAccount,omitempty"`
 }
 
 type NodeSpec struct {
