@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	DATABASE_PROPERTIES_VOLUME_NAME         = "database-properties"
-	TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH = "/config/database.properties"
-	TEAMCITY_DATABASE_PROPERTIES_SUB_PATH   = "database.properties"
-	TEAMCITY_CONTAINER_NAME                 = "teamcity-server"
+	TEAMCITY_CONTAINER_NAME         = "teamcity-server"
+	TEAMCITY_DB_USER_SECRET_KEY     = "connectionProperties.user"
+	TEAMCITY_DB_PASSWORD_SECRET_KEY = "connectionProperties.password"
+	TEAMCITY_DB_URL_SECRET_KEY      = "connectionUrl"
 )
 
 func CreateEmptyStatefulSet(name string, namespace string, labels map[string]string) v1.StatefulSet {
@@ -148,9 +148,6 @@ func createVolumeMountFromCustomPersistentVolumeClaim(persistentVolumeClaim Cust
 	return v12.VolumeMount{Name: persistentVolumeClaim.VolumeMount.Name, MountPath: persistentVolumeClaim.VolumeMount.MountPath}
 }
 
-func SecretMountsBuilder(dataDirPath string) v12.VolumeMount {
-	return v12.VolumeMount{Name: DATABASE_PROPERTIES_VOLUME_NAME, MountPath: fmt.Sprintf("%s%s", dataDirPath, TEAMCITY_DATABASE_PROPERTIES_MOUNT_PATH), SubPath: TEAMCITY_DATABASE_PROPERTIES_SUB_PATH}
-}
 func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container) {
 	container.Name = TEAMCITY_CONTAINER_NAME
 	container.Image = instance.Spec.Image
@@ -206,7 +203,7 @@ func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 			ValueFrom: &v12.EnvVarSource{
 				SecretKeyRef: &v12.SecretKeySelector{
 					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
-					Key:                  "connectionProperties.user",
+					Key:                  TEAMCITY_DB_USER_SECRET_KEY,
 				},
 			},
 		},
@@ -215,7 +212,7 @@ func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 			ValueFrom: &v12.EnvVarSource{
 				SecretKeyRef: &v12.SecretKeySelector{
 					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
-					Key:                  "connectionProperties.password",
+					Key:                  TEAMCITY_DB_PASSWORD_SECRET_KEY,
 				},
 			},
 		},
@@ -224,7 +221,7 @@ func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 			ValueFrom: &v12.EnvVarSource{
 				SecretKeyRef: &v12.SecretKeySelector{
 					LocalObjectReference: v12.LocalObjectReference{Name: databaseSecretName},
-					Key:                  "connectionUrl",
+					Key:                  TEAMCITY_DB_URL_SECRET_KEY,
 				},
 			},
 		},
