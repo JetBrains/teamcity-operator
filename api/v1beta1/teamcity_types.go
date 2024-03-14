@@ -73,8 +73,6 @@ type NodeSpec struct {
 
 	Affinity v1.Affinity `json:"affinity,omitempty"`
 
-	Annotations map[string]string `json:"annotations,omitempty"`
-
 	Responsibilities []string `json:"responsibilities,omitempty"`
 }
 

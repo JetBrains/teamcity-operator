@@ -154,13 +154,6 @@ func (in *NodeSpec) DeepCopyInto(out *NodeSpec) {
 		}
 	}
 	in.Affinity.DeepCopyInto(&out.Affinity)
-	if in.Annotations != nil {
-		in, out := &in.Annotations, &out.Annotations
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.Responsibilities != nil {
 		in, out := &in.Responsibilities, &out.Responsibilities
 		*out = make([]string, len(*in))
