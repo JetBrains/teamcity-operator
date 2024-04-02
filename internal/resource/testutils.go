@@ -28,6 +28,7 @@ var (
 	DefaultIngressBuilder               *IngressBuilder
 	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
 	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
+	DefaultServiceAccountBuilder        *ServiceAccountBuilder
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -88,6 +89,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	DefaultIngressBuilder = builder.Ingress()
 	DefaultPersistentVolumeClaimBuilder = builder.PersistentVolumeClaim()
 	DefaultSecondaryStatefulSetBuilder = builder.SecondaryStatefulSet()
+	DefaultServiceAccountBuilder = builder.ServiceAccount()
 }
 
 func getBaseTcInstance() TeamCity {
@@ -311,6 +313,15 @@ func getNode(nodeName string, annotations map[string]string, requests corev1.Res
 		Spec: NodeSpec{
 			Requests:         requests,
 			Responsibilities: responsibilities,
+		},
+	}
+}
+
+func getServiceAccount() ServiceAccount {
+	return ServiceAccount{
+		Name: "test-service-account",
+		Annotations: map[string]string{
+			"eks.amazonaws.com/role-arn": "some-role",
 		},
 	}
 }
