@@ -31,9 +31,10 @@ var (
 	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
 	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
 
-	StaleServiceName = "StaleService"
-	StalePvcName     = "StalePvc"
-	StaleIngressName = "StaleIngress"
+	StaleServiceName     = "StaleService"
+	StalePvcName         = "StalePvc"
+	StaleIngressName     = "StaleIngress"
+	StaleStatefulSetName = "StaleSTS"
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
