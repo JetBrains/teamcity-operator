@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	defaultscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -23,12 +24,17 @@ type ResourceModifier func(*TeamCity)
 
 var (
 	Instance                            TeamCity
+	DefaultClient                       client.Client
 	DefaultStatefulSetBuilder           *StatefulSetBuilder
 	DefaultServiceBuilder               *ServiceBuilder
 	DefaultIngressBuilder               *IngressBuilder
 	DefaultPersistentVolumeClaimBuilder *PersistentVolumeClaimBuilder
 	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
 	DefaultServiceAccountBuilder        *ServiceAccountBuilder
+
+	StaleServiceName = "StaleService"
+	StalePvcName     = "StalePvc"
+	StaleIngressName = "StaleIngress"
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -83,6 +89,7 @@ func BeforeEachBuild(modify ResourceModifier) {
 	builder = &TeamCityResourceBuilder{
 		Instance: &Instance,
 		Scheme:   scheme,
+		Client:   DefaultClient,
 	}
 	DefaultStatefulSetBuilder = builder.StatefulSet()
 	DefaultServiceBuilder = builder.Service()
