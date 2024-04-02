@@ -32,9 +32,10 @@ var (
 	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
 	DefaultServiceAccountBuilder        *ServiceAccountBuilder
 
-	StaleServiceName = "StaleService"
-	StalePvcName     = "StalePvc"
-	StaleIngressName = "StaleIngress"
+	StaleServiceName        = "StaleService"
+	StalePvcName            = "StalePvc"
+	StaleIngressName        = "StaleIngress"
+	StaleServiceAccountName = "StaleServiceAccount"
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
