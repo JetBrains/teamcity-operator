@@ -235,7 +235,7 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	if len(node.Spec.Responsibilities) > 0 {
 		responsibilities = ConvertResponsibilitiesToServerOptions(node.Spec.Responsibilities)
 	}
-	extraServerOpts = extraServerOpts + responsibilities
+	extraServerOpts = responsibilities + extraServerOpts
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
 	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Spec.Env)
