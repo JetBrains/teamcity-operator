@@ -330,4 +330,23 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSetLabels["app.kubernetes.io/name"]).ToNot(Equal(providedLabels["app.kubernetes.io/name"]))
 		})
 	})
+	Context("TeamCity with service account", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.ServiceAccount = getServiceAccount()
+			})
+		})
+		It("sets serviceaccount name in StatefulSet spec", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			serviceAccountName := statefulSet.Spec.Template.Spec.ServiceAccountName
+			Expect(serviceAccountName).To(Equal(Instance.Spec.ServiceAccount.Name))
+		})
+	})
+
 })

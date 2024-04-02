@@ -291,4 +291,22 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
+
+	Context("TeamCity with service account", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.ServiceAccount = getServiceAccount()
+			})
+		})
+		It("sets serviceaccount name in StatefulSet spec", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				serviceAccountName := statefulSet.Spec.Template.Spec.ServiceAccountName
+				Expect(serviceAccountName).To(Equal(Instance.Spec.ServiceAccount.Name))
+			}
+		})
+	})
 })
