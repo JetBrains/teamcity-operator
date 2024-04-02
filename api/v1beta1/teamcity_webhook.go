@@ -45,7 +45,7 @@ var validSecondaryNodeResponsibilities = []string{
 	"CAN_PROCESS_BUILD_TRIGGERS",
 	"CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS",
 }
-var validMainNodeResponsibilities = append(validSecondaryNodeResponsibilities, "MAIN_NODE")
+var validMainNodeResponsibilities = allTeamCityResponsibilities
 
 // log is for logging in this package.
 var teamcitylog = logf.Log.WithName("teamcity-resource")
