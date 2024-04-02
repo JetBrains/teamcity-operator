@@ -54,11 +54,11 @@ func (builder *IngressBuilder) Update(object client.Object) error {
 func (builder *IngressBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
 	currentIngressList := &netv1.IngressList{}
 	obsoleteObjects := []client.Object{}
-	listOtions := []client.ListOption{
+	listOptions := []client.ListOption{
 		client.InNamespace(builder.Instance.Namespace),
 		client.MatchingLabels(metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)),
 	}
-	if err := builder.Client.List(ctx, currentIngressList, listOtions...); err != nil {
+	if err := builder.Client.List(ctx, currentIngressList, listOptions...); err != nil {
 		return nil, err
 	}
 	for _, ingress := range currentIngressList.Items {
