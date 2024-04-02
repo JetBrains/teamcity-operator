@@ -23,10 +23,11 @@ type ResourceBuilder interface {
 func (builder *TeamCityResourceBuilder) ResourceBuilders() []ResourceBuilder {
 
 	builders := []ResourceBuilder{
-		builder.StatefulSet(),
+		builder.PersistentVolumeClaim(),
+		builder.ServiceAccount(),
 		builder.Service(),
 		builder.Ingress(),
-		builder.PersistentVolumeClaim(),
+		builder.StatefulSet(),
 		builder.SecondaryStatefulSet(),
 	}
 
