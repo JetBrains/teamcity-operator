@@ -54,7 +54,7 @@ type TeamCitySpec struct {
 	//+kubebuilder:default:={}
 	IngressList []Ingress `json:"ingressList,omitempty"`
 	//+kubebuilder:default:={}
-	ServiceAccount v1.ServiceAccount `json:"serviceAccount,omitempty"`
+	ServiceAccount ServiceAccount `json:"serviceAccount,omitempty"`
 }
 
 type NodeSpec struct {
@@ -140,6 +140,10 @@ func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistent
 	return append(instance.Spec.PersistentVolumeClaims, instance.Spec.DataDirVolumeClaim)
 }
 
+func (instance *TeamCity) ServiceAccountProvided() bool {
+	return instance.Spec.ServiceAccount.Name != ""
+}
+
 type Ingress struct {
 	Name        string            `json:"name,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
@@ -150,6 +154,11 @@ type Service struct {
 	Name        string            `json:"name,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 	ServiceSpec v1.ServiceSpec    `json:"spec,omitempty"`
+}
+
+type ServiceAccount struct {
+	Name        string            `json:"name"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 func init() {

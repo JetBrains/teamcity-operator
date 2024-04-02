@@ -7040,6 +7040,17 @@ spec:
                   - spec
                   type: object
                 type: array
+              serviceAccount:
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
               serviceList:
                 items:
                   properties:
