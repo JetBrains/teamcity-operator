@@ -157,7 +157,7 @@ type Service struct {
 }
 
 type ServiceAccount struct {
-	Name        string            `json:"name"`
+	Name        string            `json:"name,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
