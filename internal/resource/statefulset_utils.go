@@ -42,7 +42,8 @@ func CreateEmptyStatefulSet(name string, namespace string, labels map[string]str
 }
 func DefaultEnvironmentVariableBuilder(nodeName string, xmxValue string, dataDirPath string, extraServerOpts string) []v12.EnvVar {
 	return []v12.EnvVar{
-		PodIPEnvVariableBuilder(),
+		PodNameEnvVariableBuilder(),
+		PodNamespaceEnvVariableBuilder(),
 		DataDirPathEnvVar(dataDirPath),
 		LogDirPathEnvVar(dataDirPath),
 		ServerMemOptsEnvVar(xmxValue),
@@ -77,7 +78,7 @@ func ServerOptsEnvVar(dataDirPath string, nodeName string, extraServerOpts strin
 		Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 			fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", dataDirPath, "/memoryDumps/", nodeName) +
 			fmt.Sprintf(" -Dteamcity.server.nodeId=%s", nodeName) +
-			fmt.Sprintf(" -Dteamcity.server.rootURL=http://$(MY_IP)") +
+			fmt.Sprintf(" -Dteamcity.server.rootURL=http://$(POD_NAME).$(POD_NAMESPACE)") +
 			extraServerOpts,
 	}
 }
@@ -109,12 +110,23 @@ func ConvertStartUpPropertiesToServerOptions(startupProperties map[string]string
 	return
 }
 
-func PodIPEnvVariableBuilder() v12.EnvVar {
+func PodNameEnvVariableBuilder() v12.EnvVar {
 	return v12.EnvVar{
-		Name: "MY_IP",
+		Name: "POD_NAME",
 		ValueFrom: &v12.EnvVarSource{
 			FieldRef: &v12.ObjectFieldSelector{
-				FieldPath: "status.podIP",
+				FieldPath: "metadata.name",
+			},
+		},
+	}
+}
+
+func PodNamespaceEnvVariableBuilder() v12.EnvVar {
+	return v12.EnvVar{
+		Name: "POD_NAMESPACE",
+		ValueFrom: &v12.EnvVarSource{
+			FieldRef: &v12.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
 			},
 		},
 	}
@@ -237,7 +249,7 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	if len(node.Spec.Responsibilities) > 0 {
 		responsibilities = ConvertResponsibilitiesToServerOptions(node.Spec.Responsibilities)
 	}
-	extraServerOpts = extraServerOpts + responsibilities
+	extraServerOpts = responsibilities + extraServerOpts
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
 	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Spec.Env)

@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"context"
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
@@ -8,6 +9,8 @@ import (
 	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
 
@@ -15,6 +18,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity secondary node with minimal configuration", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
+				DefaultClient = &secondaryStatefulSetK8sClientMock{}
 				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
 			})
 		})
@@ -124,11 +128,20 @@ var _ = Describe("Secondary StatefulSet", func() {
 				Expect(dataDirVolumeMount.MountPath).To(Equal(dataDirPVC.VolumeMount.MountPath))
 			}
 		})
+		It("returns obsolete objects correctly", func() {
+			obsoleteObjects, err := DefaultSecondaryStatefulSetBuilder.GetObsoleteObjects(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(obsoleteObjects)).To(Equal(1))
+			Expect(obsoleteObjects[0].GetName()).To(Equal(StaleStatefulSetName))
+		})
 	})
 	Context("TeamCity with init containers", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
-				teamcity.Spec.MainNode.Spec.InitContainers = getInitContainers()
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.InitContainers = getInitContainers()
+				teamcity.Spec.SecondaryNodes[1].Spec.InitContainers = getInitContainers()
 			})
 		})
 		It("adds init containers", func() {
@@ -138,7 +151,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 			for _, object := range objectList {
 				err = DefaultSecondaryStatefulSetBuilder.Update(object)
 				statefulSet := object.(*v1.StatefulSet)
-				Expect(statefulSet.Spec.Template.Spec.InitContainers[0]).To(Equal(initContainers))
+				Expect(statefulSet.Spec.Template.Spec.InitContainers).To(Equal(initContainers))
 			}
 		})
 
@@ -146,6 +159,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with database properties", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
 				teamcity.Spec.DatabaseSecret = getDatabaseSecret()
 			})
 
@@ -177,6 +191,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with startup properties", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
 				teamcity.Spec.StartupPropertiesConfig = getStartupConfigurations()
 			})
 		})
@@ -207,6 +222,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with additional mounts", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
 				teamcity.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{getAdditionalPVC()}
 			})
 		})
@@ -224,7 +240,10 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with node selector", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
-				teamcity.Spec.MainNode.Spec.NodeSelector = getNodeSelector()
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.NodeSelector = getNodeSelector()
+				teamcity.Spec.SecondaryNodes[1].Spec.NodeSelector = getNodeSelector()
+
 			})
 		})
 		It("sets node selector terms correctly", func() {
@@ -240,7 +259,9 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with affinity", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
-				teamcity.Spec.MainNode.Spec.Affinity = getAffinity()
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.Affinity = getAffinity()
+				teamcity.Spec.SecondaryNodes[1].Spec.Affinity = getAffinity()
 			})
 		})
 		It("sets affinity correctly", func() {
@@ -263,6 +284,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 	Context("TeamCity with custom labels", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
 				teamcity.Labels = getLabels()
 			})
 		})
@@ -310,3 +332,34 @@ var _ = Describe("Secondary StatefulSet", func() {
 		})
 	})
 })
+
+type secondaryStatefulSetK8sClientMock struct {
+	client.Client
+}
+
+func (m *secondaryStatefulSetK8sClientMock) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+	listStatefulSet, ok := list.(*v1.StatefulSetList)
+	if !ok {
+		return fmt.Errorf("unable to convert object list to statefulset list")
+	}
+	secondaryNodes := getSecondaryNodes()
+
+	listStatefulSet.Items = []v1.StatefulSet{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: secondaryNodes[0].Name,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: secondaryNodes[1].Name,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: StaleStatefulSetName,
+			},
+		},
+	}
+	return nil
+}

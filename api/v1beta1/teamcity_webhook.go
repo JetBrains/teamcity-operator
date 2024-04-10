@@ -45,7 +45,7 @@ var validSecondaryNodeResponsibilities = []string{
 	"CAN_PROCESS_BUILD_TRIGGERS",
 	"CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS",
 }
-var validMainNodeResponsibilities = append(validSecondaryNodeResponsibilities, "MAIN_NODE")
+var validMainNodeResponsibilities = allTeamCityResponsibilities
 
 // log is for logging in this package.
 var teamcitylog = logf.Log.WithName("teamcity-resource")
@@ -97,12 +97,9 @@ func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
 }
 
 func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
-	//if err := validateReplicas(teamcity); err != nil {
-	//	return warnings, err
-	//}
-	//if err := validateRequests(teamcity); err != nil {
-	//	return warnings, err
-	//}
+	if err := validateRequestsOfAllNodes(teamcity); err != nil {
+		return nil, err
+	}
 	if err := validateXmxPercentage(teamcity); err != nil {
 		return nil, err
 	}
@@ -125,26 +122,15 @@ func validateXmxPercentage(teamcity *TeamCity) (err error) {
 	return nil
 }
 
-//func validateReplicas(teamcity *TeamCity) (err error) {
-//	if *teamcity.Spec.Replicas > 1 {
-//		return typed.ValidationError{
-//			Path:         "teamcity.spec.replicas",
-//			ErrorMessage: "Replicas value cannot be greater than 1",
-//		}
-//	}
-//	return nil
-//}
-
-//func validateRequests(teamcity *TeamCity) (err error) {
-//	if len(teamcity.Spec.Requests.Memory().String()) <= 0 {
-//		return typed.ValidationError{
-//			Path:         "teamcity.spec.requests.memory",
-//			ErrorMessage: "Requested memory cannot be empty",
-//		}
-//	}
-//	return nil
-//
-//}
+func validateRequestsInNode(objectPath string, node Node) (err error) {
+	if len(node.Spec.Requests.Memory().String()) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "requests.memory"),
+			ErrorMessage: "Requested memory cannot be empty",
+		}
+	}
+	return nil
+}
 
 func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err error) {
 	if err = validateCustomPersistentVolumeClaim("teamcity.spec.dataDirVolumeClaim", teamcity.Spec.DataDirVolumeClaim); err != nil {
@@ -186,6 +172,17 @@ func validateCustomPersistentVolumeClaim(objectPath string, claim CustomPersiste
 	}
 
 	return nil
+}
+func validateRequestsOfAllNodes(teamcity *TeamCity) (err error) {
+	if err := validateRequestsInNode("teamcity.spec.mainNode", teamcity.Spec.MainNode); err != nil {
+		return err
+	}
+	for idx, secondaryNode := range teamcity.Spec.SecondaryNodes {
+		if err := validateRequestsInNode(fmt.Sprintf("teamcity.spec.secondaryNode[%d]", idx), secondaryNode); err != nil {
+			return err
+		}
+	}
+	return err
 }
 
 func validateResponsibilitiesOfAllNodes(teamcity *TeamCity) (warning string, err error) {

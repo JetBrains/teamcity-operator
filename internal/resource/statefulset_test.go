@@ -91,11 +91,20 @@ var _ = Describe("StatefulSet", func() {
 				Value: datadirPath,
 			}
 
-			myIP := v12.EnvVar{
-				Name: "MY_IP",
+			podName := v12.EnvVar{
+				Name: "POD_NAME",
 				ValueFrom: &v12.EnvVarSource{
 					FieldRef: &v12.ObjectFieldSelector{
-						FieldPath: "status.podIP",
+						FieldPath: "metadata.name",
+					},
+				},
+			}
+
+			podNamespace := v12.EnvVar{
+				Name: "POD_NAMESPACE",
+				ValueFrom: &v12.EnvVarSource{
+					FieldRef: &v12.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
 					},
 				},
 			}
@@ -114,8 +123,8 @@ var _ = Describe("StatefulSet", func() {
 				Name: "TEAMCITY_SERVER_OPTS",
 				Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 					fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", datadirPath, "/memoryDumps/", Instance.Spec.MainNode.Name) +
-					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", Instance.Spec.MainNode.Name) + " -Dteamcity.server.rootURL=http://$(MY_IP)"}
-			expected := append([]v12.EnvVar{}, myIP, dataPath, logsPath, memOpts, serverOpts)
+					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", Instance.Spec.MainNode.Name) + " -Dteamcity.server.rootURL=http://$(POD_NAME).$(POD_NAMESPACE)"}
+			expected := append([]v12.EnvVar{}, podName, podNamespace, dataPath, logsPath, memOpts, serverOpts)
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
 			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
 			Expect(envVarsAreEqual).To(Equal(true))
