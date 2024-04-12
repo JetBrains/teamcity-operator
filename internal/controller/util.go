@@ -38,10 +38,24 @@ func GetStatefulSetByName(r *TeamcityReconciler, ctx context.Context, namespaced
 	return statefulSet, nil
 }
 
-func IsNodeHealthy(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (bool bool, err error) {
+func isNewestGeneration(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (bool bool, err error) {
 	var statefulSet v1.StatefulSet
 	if statefulSet, err = GetStatefulSetByName(r, ctx, namespacedName); err != nil {
 		return false, err
 	}
-	return statefulSet.Status.ReadyReplicas == int32(1), err
+	if statefulSet.Generation != statefulSet.Status.ObservedGeneration {
+		return false, nil
+	}
+	return true, nil
+}
+
+func isNodeUpdateFinished(r *TeamcityReconciler, ctx context.Context, namespacedName types.NamespacedName) (bool bool, err error) {
+	var statefulSet v1.StatefulSet
+	if statefulSet, err = GetStatefulSetByName(r, ctx, namespacedName); err != nil {
+		return false, err
+	}
+	if statefulSet.Status.CurrentRevision != statefulSet.Status.UpdateRevision {
+		return false, nil
+	}
+	return true, nil
 }

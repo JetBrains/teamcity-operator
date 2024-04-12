@@ -189,12 +189,19 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 				Namespace: instance.Namespace,
 				Name:      instance.Spec.MainNode.Name,
 			}
-			healthy, err := IsNodeHealthy(r, ctx, mainNodeNamespacedName)
+			newestGeneration, err := isNewestGeneration(r, ctx, mainNodeNamespacedName)
 			if err != nil {
-				log.V(1).Error(err, "Unable to get health of the main node")
+				log.V(1).Error(err, "Unable to get generation information for the main node.")
 			}
-			log.V(1).Info(fmt.Sprintf("Main node started: %s", strconv.FormatBool(healthy)))
-			preconditionSuccessful = healthy
+
+			updated, err := isNodeUpdateFinished(r, ctx, mainNodeNamespacedName)
+			if err != nil {
+				log.V(1).Error(err, "Unable to get revision status information of the main node")
+			}
+
+			log.V(1).Info(fmt.Sprintf("Newest generation: %s", strconv.FormatBool(newestGeneration)))
+			log.V(1).Info(fmt.Sprintf("Main node updated: %s", strconv.FormatBool(updated)))
+			preconditionSuccessful = newestGeneration && updated
 		}
 	}
 	return preconditionSuccessful
