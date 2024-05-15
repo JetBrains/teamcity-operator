@@ -288,4 +288,4 @@ $(HELM): $(LOCALBIN)
 
 helm: manifests kustomize install-helm install-helmify
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(HELMIFY) charts/teamcity-operator
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -cert-manager-as-subchart charts/teamcity-operator

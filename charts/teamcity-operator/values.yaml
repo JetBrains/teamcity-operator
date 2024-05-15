@@ -1,3 +1,6 @@
+certmanager:
+  enabled: true
+  installCRDs: true
 controllerManager:
   kubeRbacProxy:
     args:
@@ -32,7 +35,7 @@ controllerManager:
         - ALL
     image:
       repository: registry.jetbrains.team/p/tch/tccloud-containers/teamcity-operator
-      tag: "37"
+      tag: latest
     resources:
       limits:
         cpu: 500m

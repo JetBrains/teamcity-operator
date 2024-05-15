@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.jetbrains.team/p/tch/tccloud-containers/teamcity-operator
-  newTag: "37"
+  newTag: latest
