@@ -56,6 +56,7 @@ type TeamcityReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -126,6 +127,7 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1.StatefulSet{}, builder.WithPredicates(predicate.StatefulSetEventPredicates())).
 		Owns(&v12.Service{}).
 		Owns(&netv1.Ingress{}).
+		Owns(&v12.ServiceAccount{}).
 		Owns(&v12.PersistentVolumeClaim{}, builder.WithPredicates(predicate.PersistentVolumeClaimEventPredicates())).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
