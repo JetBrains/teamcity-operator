@@ -59,45 +59,55 @@ data:
 kind: Secret
 metadata:
   name: database-properties
----
-apiVersion: jetbrains.com/v1beta1
-kind: TeamCity
-metadata:
-  name: teamcity-sample-with-database
-  namespace: default
-  finalizers:
-    - "teamcity.jetbrains.com/finalizer"
-spec:
-  image: jetbrains/teamcity-server
-  databaseSecret:
-    secret: database-properties
-  mainNode:
-    name: main-node
-    spec:
-      env:
-        AWS_DEFAULT_REGION: "eu-west-1"
-      requests:
-        cpu: "400m"
-        memory: "1000Mi"
-  dataDirVolumeClaim:
-    name: teamcity-node-volume1
-    volumeMount:
-      name: teamcity-node-volume1
-      mountPath: /storage
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-  persistentVolumeClaims:
-    - name: teamcity-node-config-dir
-      volumeMount:
-        name: teamcity-node-config-dir
-        mountPath: /storage/config
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
+#---
+#apiVersion: jetbrains.com/v1beta1
+#kind: TeamCity
+#metadata:
+#  name: teamcity-sample-with-database
+#  namespace: default
+#  finalizers:
+#    - "teamcity.jetbrains.com/finalizer"
+#spec:
+##  image: jetbrains/teamcity-server:2024.03
+#  image: jetbrains/teamcity-server
+#  databaseSecret:
+#    secret: database-properties
+#  mainNode:
+#    name: main-node
+#    spec:
+#      env:
+#        AWS_DEFAULT_REGION: "eu-west-1"
+#      requests:
+#        cpu: "400m"
+#        memory: "1000Mi"
+#  dataDirVolumeClaim:
+#    name: teamcity-node-volume1
+#    volumeMount:
+#      name: teamcity-node-volume1
+#      mountPath: /storage
+#    spec:
+#      accessModes:
+#        - ReadWriteOnce
+#      resources:
+#        requests:
+#          storage: 1Gi
+#  persistentVolumeClaims:
+#    - name: teamcity-node-config-dir
+#      volumeMount:
+#        name: teamcity-node-config-dir
+#        mountPath: /storage/config
+#      spec:
+#        accessModes:
+#          - ReadWriteOnce
+#        resources:
+#          requests:
+#            storage: 1Gi
+#  secondaryNodes:
+#    - name: secondary-node
+#      annotations:
+#        "temporary-node": ""
+#        "version": jetbrains/teamcity-server:2024.03
+#      spec:
+#        requests:
+#          cpu: "1000m"
+#          memory: "2500Mi"

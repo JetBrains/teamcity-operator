@@ -20,12 +20,16 @@ import (
 	"context"
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -97,10 +101,29 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	builders := resourceBuilder.ResourceBuilders()
 
+	mainNodeRecreation, err := r.requiresMainNodeRecreation(ctx, &teamcity)
+
+	if mainNodeRecreation {
+		if _, err := r.reconcileROCreateOrUpdate(ctx, &teamcity, mainNodeRecreation); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		secondaryKey := types.NamespacedName{
+			Name:      "update-ro-replica",
+			Namespace: teamcity.Namespace,
+		}
+		secondaryNodeAvailable, _ := isNodeUpdateFinished(r, ctx, secondaryKey)
+
+		if !secondaryNodeAvailable {
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+		}
+	}
+
 	for _, builder := range builders {
 		if _, err := r.reconcileDelete(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
+
 		if preconditionSuccess := r.validatePreconditions(ctx, builder, teamcity); !preconditionSuccess {
 			log.V(1).Info("Preconditions are not satisfied")
 			//we want to retry reconcile after preconditions will be met
@@ -112,6 +135,16 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 	}
+
+	if postconditionSuccess := r.validatePostcondition(ctx, teamcity); !postconditionSuccess {
+		log.V(1).Info("Postconditions are not satisfied")
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+	}
+
+	if result, err := r.reconcileRODelete(ctx, &teamcity); err != nil {
+		return result, err
+	}
+
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	return ctrl.Result{}, nil
 }
@@ -205,4 +238,154 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 		}
 	}
 	return preconditionSuccessful
+}
+
+func (r *TeamcityReconciler) requiresMainNodeRecreation(ctx context.Context, instance *TeamCity) (bool, error) {
+	//log := log.FromContext(ctx)
+	existing, err := GetStatefulSetByName(r, ctx, types.NamespacedName{Name: instance.Spec.MainNode.Name, Namespace: instance.Namespace})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	var desired v1.StatefulSet
+	resource.ConfigureStatefulSet(instance, instance.Spec.MainNode, &desired)
+	var container v12.Container
+	resource.ConfigureContainer(instance, instance.Spec.MainNode, &container)
+	desired.Spec.Template.Spec.Containers = []v12.Container{container}
+
+	if !equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *TeamcityReconciler) createRoReplica(ctx context.Context, instance *TeamCity, main v1.StatefulSet) (client.ObjectKey, error) {
+	//log := log.FromContext(ctx)
+	secondaryNodeName := "update-ro-replica"
+	secondrayNodeLabels := metadata.GetStatefulSetLabels(instance.Name, secondaryNodeName, "ro-replica", instance.Labels)
+	secondary := v1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secondaryNodeName,
+			Namespace: instance.Namespace,
+			Labels:    secondrayNodeLabels,
+		},
+	}
+	secondary.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: secondrayNodeLabels,
+	}
+	secondary.Spec.Template.Spec = main.Spec.Template.Spec
+	secondary.Spec.Template.Labels = secondrayNodeLabels
+
+	secondaryNode := Node{
+		Name: secondaryNodeName,
+		Spec: NodeSpec{
+			Requests: instance.Spec.MainNode.Spec.Requests,
+		},
+	}
+	envVars := resource.BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, secondaryNode)
+	secondary.Spec.Template.Spec.Containers[0].Env = envVars
+	if err := controllerutil.SetControllerReference(instance, &secondary, r.Scheme); err != nil {
+		return client.ObjectKey{}, fmt.Errorf("failed setting controller reference: %w", err)
+	}
+
+	err := r.Create(ctx, &secondary)
+	if err != nil {
+		return client.ObjectKey{}, err
+	}
+	return client.ObjectKey{Name: secondary.Name, Namespace: secondary.Namespace}, nil
+}
+
+func (r *TeamcityReconciler) validatePostcondition(ctx context.Context, instance TeamCity) (conditionSuccessful bool) {
+	log := log.FromContext(ctx)
+	conditionSuccessful = true
+
+	mainNodeNamespacedName := types.NamespacedName{
+		Namespace: instance.Namespace,
+		Name:      instance.Spec.MainNode.Name,
+	}
+	newestGeneration, err := isNewestGeneration(r, ctx, mainNodeNamespacedName)
+	if err != nil {
+		log.V(1).Error(err, "Unable to get generation information for the main node.")
+	}
+
+	updated, err := isNodeUpdateFinished(r, ctx, mainNodeNamespacedName)
+	if err != nil {
+		log.V(1).Error(err, "Unable to get revision status information of the main node")
+	}
+
+	log.V(1).Info(fmt.Sprintf("Newest generation: %s", strconv.FormatBool(newestGeneration)))
+	log.V(1).Info(fmt.Sprintf("Main node updated: %s", strconv.FormatBool(updated)))
+	conditionSuccessful = newestGeneration && updated
+
+	return conditionSuccessful
+}
+
+func (r *TeamcityReconciler) reconcileROCreateOrUpdate(ctx context.Context, instance *TeamCity, mainNodeRecreationRequired bool) (ctrl.Result, error) {
+	if !mainNodeRecreationRequired {
+		return ctrl.Result{}, nil
+	}
+	mainStatefulset, err := GetStatefulSetByName(r, ctx, types.NamespacedName{Name: instance.Spec.MainNode.Name, Namespace: instance.Namespace})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	secondaryNodeName := "update-ro-replica"
+	secondrayNodeLabels := metadata.GetStatefulSetLabels(instance.Name, secondaryNodeName, "ro-replica", instance.Labels)
+	secondary := v1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secondaryNodeName,
+			Namespace: instance.Namespace,
+			Labels:    secondrayNodeLabels,
+		},
+	}
+	secondary.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: secondrayNodeLabels,
+	}
+	secondary.Spec.Template.Spec = mainStatefulset.Spec.Template.Spec
+	secondary.Spec.Template.Labels = secondrayNodeLabels
+
+	secondaryNode := Node{
+		Name: secondaryNodeName,
+		Spec: NodeSpec{
+			Requests: instance.Spec.MainNode.Spec.Requests,
+		},
+	}
+	envVars := resource.BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, secondaryNode)
+	secondary.Spec.Template.Spec.Containers[0].Env = envVars
+	if err := controllerutil.SetControllerReference(instance, &secondary, r.Scheme); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed setting controller reference: %w", err)
+	}
+
+	err = r.Create(ctx, &secondary)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return ctrl.Result{}, err
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *TeamcityReconciler) reconcileRODelete(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
+	secondaryNodeName := "update-ro-replica"
+	key := types.NamespacedName{
+		Name:      secondaryNodeName,
+		Namespace: instance.Namespace,
+	}
+	var secondary v1.StatefulSet
+	if err := r.Get(ctx, key, &secondary); err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	if err := r.Delete(ctx, &secondary); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
 }
