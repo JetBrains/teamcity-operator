@@ -278,13 +278,15 @@ install-helmify: $(HELMIFY) ## Download helmify locally if necessary.
 $(HELMIFY): $(LOCALBIN)
 	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@v0.4.5
 
-######################### Helm
-HELM ?= $(LOCALBIN)/helm
-.PHONY: helm
-install-helm: $(HELM) ## Download helm locally if necessary.
-$(HELM): $(LOCALBIN)
-	curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh
 
+######################### Helm
+ifeq ($(shell uname), Darwin)
+install-helm:
+	brew install helm
+else ifeq ($(shell uname), Linux)
+install-helm:
+	curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh
+endif
 
 helm: manifests kustomize install-helm install-helmify
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
