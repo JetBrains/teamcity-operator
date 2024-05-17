@@ -47,7 +47,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= registry.jetbrains.team/p/tch/tccloud-containers/teamcity-operator:latest
+IMG ?= jetbrains/teamcity-operator:latest
 
 DOCKER_BUILD_ARGS ?= --platform linux/amd64
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
