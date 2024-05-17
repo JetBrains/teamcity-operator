@@ -54,8 +54,8 @@ func isNodeUpdateFinished(r *TeamcityReconciler, ctx context.Context, namespaced
 	if statefulSet, err = GetStatefulSetByName(r, ctx, namespacedName); err != nil {
 		return false, err
 	}
-	if statefulSet.Status.CurrentRevision != statefulSet.Status.UpdateRevision {
-		return false, nil
+	if statefulSet.Status.CurrentRevision == statefulSet.Status.UpdateRevision && statefulSet.Status.ReadyReplicas == int32(1) {
+		return true, nil
 	}
-	return true, nil
+	return false, nil
 }
