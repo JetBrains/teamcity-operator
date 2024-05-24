@@ -61,3 +61,22 @@ func isNodeUpdateFinished(r *TeamcityReconciler, ctx context.Context, namespaced
 	}
 	return false, nil
 }
+
+func isStatefulSetRevisionUpdated(sts *v1.StatefulSet) bool {
+	return sts.Status.CurrentRevision == sts.Status.UpdateRevision
+}
+
+func isStatefulSetAvailable(sts *v1.StatefulSet) bool {
+	return sts.Status.AvailableReplicas == 1
+}
+
+func isStatefulSetNewestGeneration(sts *v1.StatefulSet) bool {
+	return sts.Generation == sts.Status.ObservedGeneration
+}
+
+func GetMainStatefulSetNamespacedName(instance *TeamCity) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: instance.Namespace,
+		Name:      instance.Spec.MainNode.Name,
+	}
+}

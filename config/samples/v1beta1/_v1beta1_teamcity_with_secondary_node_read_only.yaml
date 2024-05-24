@@ -28,6 +28,8 @@ spec:
           storage: 1Gi
   mainNode:
     name: main-node
+    annotations:
+      update-policy: update-with-ro
     spec:
       requests:
         cpu: "1000m"
