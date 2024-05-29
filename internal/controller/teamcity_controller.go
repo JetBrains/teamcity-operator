@@ -123,7 +123,6 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if _, err := r.reconcileDelete(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
-
 		if preconditionSuccess := r.validatePreconditions(ctx, builder, teamcity); !preconditionSuccess {
 			log.V(1).Info("Preconditions are not satisfied")
 			//we want to retry reconcile after preconditions will be met
@@ -135,7 +134,6 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 	}
-
 	result, err := r.reconcileRoDelete(ctx, &teamcity)
 	switch {
 	case err != nil:

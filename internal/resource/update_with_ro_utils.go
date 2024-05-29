@@ -14,11 +14,10 @@ import (
 )
 
 const (
-	RO_NODE_ROLE    = "update-with-ro"
-	RO_NODE_POSTFIX = "-update-replica"
-
-	UpdatePolicy       = "update-policy"
-	UpdateWithRoPolicy = "update-with-ro"
+	RoNodeRole             = "update-with-ro"
+	RoNodePostfix          = "-update-replica"
+	UpdatePolicyAnnotation = "update-policy"
+	UpdateWithRoPolicy     = "update-with-ro"
 )
 
 func BuildRoNode(instance *TeamCity, name string) Node {
@@ -33,13 +32,13 @@ func BuildRoNode(instance *TeamCity, name string) Node {
 func GetROStatefulSetNamespacedName(instance *TeamCity) types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: instance.Namespace,
-		Name:      instance.Spec.MainNode.Name + RO_NODE_POSTFIX,
+		Name:      instance.Spec.MainNode.Name + RoNodePostfix,
 	}
 }
 
 func BuildROStatefulSet(instance *TeamCity) *v1.StatefulSet {
 	node := BuildRoNode(instance, GetROStatefulSetNamespacedName(instance).Name)
-	labels := metadata.GetStatefulSetLabels(instance.Name, node.Name, RO_NODE_ROLE, instance.Labels)
+	labels := metadata.GetStatefulSetLabels(instance.Name, node.Name, RoNodeRole, instance.Labels)
 	roStatefulset := v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      node.Name,
@@ -54,7 +53,7 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	mainStatefulSet *v1.StatefulSet, roStatefulSet *v1.StatefulSet) error {
 
 	node := BuildRoNode(instance, GetROStatefulSetNamespacedName(instance).Name)
-	labels := metadata.GetStatefulSetLabels(instance.Name, node.Name, RO_NODE_ROLE, instance.Labels)
+	labels := metadata.GetStatefulSetLabels(instance.Name, node.Name, RoNodeRole, instance.Labels)
 	roStatefulSet.Spec.Selector = &metav1.LabelSelector{
 		MatchLabels: labels,
 	}
@@ -82,5 +81,5 @@ func ChangesRequireMainNodeRecreation(instance *TeamCity, existing *v1.StatefulS
 }
 
 func UpdateWithRo(node Node) bool {
-	return node.Annotations[UpdatePolicy] == UpdateWithRoPolicy
+	return node.Annotations[UpdatePolicyAnnotation] == UpdateWithRoPolicy
 }
