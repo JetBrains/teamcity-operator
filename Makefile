@@ -47,7 +47,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= jetbrains/teamcity-operator:latest
 
 DOCKER_BUILD_ARGS ?= --platform linux/amd64
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -270,3 +270,24 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+######################### Helmify
+HELMIFY ?= $(LOCALBIN)/helmify
+.PHONY: helmify
+install-helmify: $(HELMIFY) ## Download helmify locally if necessary.
+$(HELMIFY): $(LOCALBIN)
+	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@v0.4.5
+
+
+######################### Helm
+ifeq ($(shell uname), Darwin)
+install-helm:
+	brew install helm
+else ifeq ($(shell uname), Linux)
+install-helm:
+	curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh
+endif
+
+helm: manifests kustomize install-helm install-helmify
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | $(HELMIFY) charts/teamcity-operator

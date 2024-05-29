@@ -37,7 +37,7 @@ type TeamCitySpec struct {
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 
 	// +kubebuilder:default:=95
-	XmxPercentage int64 `json:"xmxPercentage"`
+	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
 	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
 	TeamCityServerPort v1.ContainerPort `json:"TeamCityServerPort,omitempty"`
 
@@ -63,7 +63,7 @@ type NodeSpec struct {
 	Env            map[string]string `json:"env,omitempty"`
 	Limits         v1.ResourceList   `json:"limits,omitempty"`
 	// +kubebuilder:default:={runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
-	PodSecurityContext v1.PodSecurityContext `json:"podSecurityContext"`
+	PodSecurityContext v1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// +kubebuilder:default:={failureThreshold: 3, successThreshold: 1, periodSeconds: 20, initialDelaySeconds: 60, timeoutSeconds: 1}
 	LivenessProbeSettings v1.Probe `json:"livenessProbeSettings,omitempty"`
 	// +kubebuilder:default:={failureThreshold: 3, successThreshold: 1, periodSeconds: 10, initialDelaySeconds: 60, timeoutSeconds: 1}

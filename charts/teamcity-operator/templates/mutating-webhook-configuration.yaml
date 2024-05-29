@@ -1,0 +1,29 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "teamcity-operator.fullname" . }}-mutating-webhook-configuration
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "teamcity-operator.fullname" . }}-serving-cert
+  labels:
+  {{- include "teamcity-operator.labels" . | nindent 4 }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: '{{ include "teamcity-operator.fullname" . }}-webhook-service'
+      namespace: '{{ .Release.Namespace }}'
+      path: /mutate-jetbrains-com-v1beta1-teamcity
+  failurePolicy: Fail
+  name: mv1beta1teamcity.kb.io
+  rules:
+  - apiGroups:
+    - jetbrains.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - teamcities
+  sideEffects: None
