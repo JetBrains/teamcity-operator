@@ -41,7 +41,10 @@ import (
 	"time"
 )
 
-const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
+const (
+	teamcityFinalizer             = "teamcity.jetbrains.com/finalizer"
+	reconciliationRequeueInterval = 10000000000
+)
 
 // TeamcityReconciler reconciles a TeamCity object
 type TeamcityReconciler struct {
@@ -127,7 +130,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			log.V(1).Info("Preconditions are not satisfied")
 			//we want to retry reconcile after preconditions will be met
 			//RequeueAfter is specified in nanoseconds :melting_face
-			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 		}
 
 		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
@@ -281,8 +284,8 @@ func (r *TeamcityReconciler) reconcileRoCreateOrUpdate(ctx context.Context, inst
 		return ctrl.Result{}, err
 	}
 	if !updateFinished {
-		log.V(1).Info(fmt.Sprintf("Reconciliation is pending. Waiting for ro node %s will be ready", roStatefulSet.GetName()))
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(10000000000)}, nil
+		log.V(1).Info(fmt.Sprintf("RO node readiness status %s. Reconciliation is pending.", strconv.FormatBool(updateFinished)))
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -311,7 +314,7 @@ func (r *TeamcityReconciler) reconcileRoDelete(ctx context.Context, instance *Te
 	}
 	if !mainReady {
 		log.V(1).Info(fmt.Sprintf("Deletion of %s is pending. Waiting for main node will be ready", roStatefulSet.GetName()))
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 	}
 	if err = r.Delete(ctx, &roStatefulSet); err != nil {
 		return ctrl.Result{}, err
