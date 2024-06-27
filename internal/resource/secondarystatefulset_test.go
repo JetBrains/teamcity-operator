@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
@@ -328,6 +329,34 @@ var _ = Describe("Secondary StatefulSet", func() {
 				statefulSet := object.(*v1.StatefulSet)
 				serviceAccountName := statefulSet.Spec.Template.Spec.ServiceAccountName
 				Expect(serviceAccountName).To(Equal(Instance.Spec.ServiceAccount.Name))
+			}
+		})
+	})
+	Context("TeamCity with extra env variables", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				DefaultClient = &secondaryStatefulSetK8sClientMock{}
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.Env = getExtraNodeEnvVars()
+				teamcity.Spec.SecondaryNodes[1].Spec.Env = getExtraNodeEnvVars()
+			})
+		})
+		It("sets node env variables correctly", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for i, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				env := statefulSet.Spec.Template.Spec.Containers[0].Env
+
+				expectedEnvVariables := Instance.Spec.SecondaryNodes[i].Spec.Env
+				expectedEnvVariablesKeys := reflect.ValueOf(expectedEnvVariables).MapKeys()
+
+				for _, key := range expectedEnvVariablesKeys {
+					envVarIndex := slices.IndexFunc(env, func(c v12.EnvVar) bool { return c.Name == key.String() })
+					envVarValue := env[envVarIndex].Value
+					Expect(envVarValue).To(Equal(expectedEnvVariables[key.String()]))
+				}
 			}
 		})
 	})

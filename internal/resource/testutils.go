@@ -32,11 +32,11 @@ var (
 	DefaultSecondaryStatefulSetBuilder  *SecondaryStatefulSetBuilder
 	DefaultServiceAccountBuilder        *ServiceAccountBuilder
 
-	StaleStatefulSetName = "StaleSTS"
+	StaleStatefulSetName    = "StaleSTS"
 	StaleServiceAccountName = "StaleServiceAccount"
-	StaleIngressName     = "StaleIngress"
-	StalePvcName         = "StalePvc"
-	StaleServiceName     = "StaleService"
+	StaleIngressName        = "StaleIngress"
+	StalePvcName            = "StalePvc"
+	StaleServiceName        = "StaleService"
 
 	scheme           *runtime.Scheme
 	builder          *TeamCityResourceBuilder
@@ -332,5 +332,12 @@ func getServiceAccount() ServiceAccount {
 		Annotations: map[string]string{
 			"eks.amazonaws.com/role-arn": "some-role",
 		},
+	}
+}
+
+func getExtraNodeEnvVars() map[string]string {
+	return map[string]string{
+		"AWS_DEFAULT_REGION": "eu-west-1",
+		"HELLO":              "WORLD",
 	}
 }
