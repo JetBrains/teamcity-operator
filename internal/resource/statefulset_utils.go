@@ -199,10 +199,10 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 }
 
 func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
-	for _, k := range env {
+	for k, v := range env {
 		var envVar = v12.EnvVar{
 			Name:      k,
-			Value:     env[k],
+			Value:     v,
 			ValueFrom: nil,
 		}
 		envVars = append(envVars, envVar)
