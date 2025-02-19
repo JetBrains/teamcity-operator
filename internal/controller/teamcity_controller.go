@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	"github.com/go-logr/logr"
@@ -108,12 +109,12 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	builders := resourceBuilder.ResourceBuilders()
 
-	createRO, err := r.roReplicaRequired(ctx, &teamcity)
-	switch {
-	case err != nil:
+	isUpdateWithRO, err := r.roReplicaRequired(ctx, &teamcity)
+	if err != nil {
 		return ctrl.Result{}, err
-	case createRO:
-		result, err := r.reconcileRoCreateOrUpdate(ctx, &teamcity)
+	}
+	if isUpdateWithRO {
+		result, err := r.doUpdateWithRO(ctx, &teamcity)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -260,65 +261,115 @@ func (r *TeamcityReconciler) roReplicaRequired(ctx context.Context, instance *Te
 	return false, nil
 }
 
-func (r *TeamcityReconciler) reconcileRoCreateOrUpdate(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
+func (r *TeamcityReconciler) doUpdateWithRO(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	var mainStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
-		return ctrl.Result{}, err
-	}
-	roStatefulSet := resource.BuildROStatefulSet(instance)
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var apiError error
-		_, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, roStatefulSet, func() error {
-			return resource.UpdateROStatefulSet(r.Scheme, instance, &mainStatefulSet, roStatefulSet)
-		})
-		return apiError
-	})
+	currentStage, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
-		log.V(1).Error(err, fmt.Sprintf("Failed to update object %s %s", roStatefulSet.GetObjectKind().GroupVersionKind().Kind, roStatefulSet.GetName()))
-		return ctrl.Result{}, err
-	}
-
-	updateFinished, err := r.statefulSetUpdateFinished(ctx, client.ObjectKeyFromObject(roStatefulSet))
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !updateFinished {
-		log.V(1).Info(fmt.Sprintf("RO node readiness status %s. Reconciliation is pending.", strconv.FormatBool(updateFinished)))
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
-	}
-	return ctrl.Result{}, nil
-}
-
-func (r *TeamcityReconciler) statefulSetUpdateFinished(ctx context.Context, stsKey types.NamespacedName) (bool, error) {
-	var sts v1.StatefulSet
-	if err := r.Get(ctx, stsKey, &sts); err != nil {
-		return false, err
-	}
-	finished := isStatefulSetNewestGeneration(&sts) && isStatefulSetRevisionUpdated(&sts) && isStatefulSetAvailable(&sts)
-	return finished, nil
-}
-
-func (r *TeamcityReconciler) reconcileRoDelete(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-	var roStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, resource.GetROStatefulSetNamespacedName(instance), &roStatefulSet); err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+		if !errors.IsNotFound(err) {
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
 	}
-	mainReady, err := r.statefulSetUpdateFinished(ctx, GetMainStatefulSetNamespacedName(instance))
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !mainReady {
-		log.V(1).Info(fmt.Sprintf("Deletion of %s is pending. Waiting for main node will be ready", roStatefulSet.GetName()))
+	switch currentStage {
+	case checkpoint.Unknown:
+		log.V(1).Info(fmt.Sprintf("Current stage %s is unknown.Update is starting", instance.Name))
+		err := DoCheckpointE(r, ctx, instance, checkpoint.UpdateStarted)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
-	}
-	if err = r.Delete(ctx, &roStatefulSet); err != nil {
+	case checkpoint.UpdateStarted:
+		HandleUpdateStarted()
+	case checkpoint.ReplicaStarting:
+		//check ro status
+		//requeue if starting
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+	case checkpoint.ReplicaReady:
+		//update main
 		return ctrl.Result{}, err
+	case checkpoint.MainShuttingDown:
+		//wait for shutdown
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+	case checkpoint.MainReady:
+		//shutdown read-only
+		return ctrl.Result{}, err
+	case checkpoint.ReplicaShuttingDown:
+		//check if ro is off
+		// if not requeue
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+	case checkpoint.UpdateFinished:
+		//cleanup checkpoints
+		//finish this loop
+		return ctrl.Result{}, err
+	default:
+		return ctrl.Result{}, nil
 	}
-	log.V(1).Info(fmt.Sprintf("Replica %s is deleted", roStatefulSet.GetName()))
 	return ctrl.Result{}, nil
 }
+
+//func (r *TeamcityReconciler) doUpdateWithRO(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
+//	//get main sts to figure out what needs to be done
+//	// we determine the situation
+//	log := log.FromContext(ctx)
+//	var mainStatefulSet v1.StatefulSet
+//	CreateUpdateCheckPointE(r, ctx,instance, checkpoint.UpdateStarted)
+//	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
+//		return ctrl.Result{}, err
+//	}
+//	//we build and create ReadOnly node
+//	roStatefulSet := resource.BuildROStatefulSet(instance)
+//	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+//		var apiError error
+//		_, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, roStatefulSet, func() error {
+//			return resource.UpdateROStatefulSet(r.Scheme, instance, &mainStatefulSet, roStatefulSet)
+//		})
+//		return apiError
+//	})
+//	if err != nil {
+//		log.V(1).Error(err, fmt.Sprintf("Failed to update object %s %s", roStatefulSet.GetObjectKind().GroupVersionKind().Kind, roStatefulSet.GetName()))
+//		return ctrl.Result{}, err
+//	}
+//	// we determine here that the RO is up and running
+//	updateFinished, err := r.statefulSetUpdateFinished(ctx, client.ObjectKeyFromObject(roStatefulSet))
+//	if err != nil {
+//		return ctrl.Result{}, err
+//	}
+//	// if not, we requeue
+//	if !updateFinished {
+//		log.V(1).Info(fmt.Sprintf("RO node readiness status %s. Reconciliation is pending.", strconv.FormatBool(updateFinished)))
+//		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+//	}
+//	return ctrl.Result{}, nil
+//}
+
+//func (r *TeamcityReconciler) statefulSetUpdateFinished(ctx context.Context, stsKey types.NamespacedName) (bool, error) {
+//	var sts v1.StatefulSet
+//	if err := r.Get(ctx, stsKey, &sts); err != nil {
+//		return false, err
+//	}
+//	finished := isStatefulSetNewestGeneration(&sts) && isStatefulSetRevisionUpdated(&sts) && isStatefulSetAvailable(&sts)
+//	return finished, nil
+//}
+//
+//func (r *TeamcityReconciler) reconcileRoDelete(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
+//	log := log.FromContext(ctx)
+//	var roStatefulSet v1.StatefulSet
+//	if err := r.Get(ctx, resource.GetROStatefulSetNamespacedName(instance), &roStatefulSet); err != nil {
+//		if errors.IsNotFound(err) {
+//			return ctrl.Result{}, nil
+//		}
+//		return ctrl.Result{}, err
+//	}
+//	mainReady, err := r.statefulSetUpdateFinished(ctx, GetMainStatefulSetNamespacedName(instance))
+//	if err != nil {
+//		return ctrl.Result{}, err
+//	}
+//	if !mainReady {
+//		log.V(1).Info(fmt.Sprintf("Deletion of %s is pending. Waiting for main node will be ready", roStatefulSet.GetName()))
+//		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+//	}
+//	if err = r.Delete(ctx, &roStatefulSet); err != nil {
+//		return ctrl.Result{}, err
+//	}
+//	log.V(1).Info(fmt.Sprintf("Replica %s is deleted", roStatefulSet.GetName()))
+//	return ctrl.Result{}, nil
+//}
