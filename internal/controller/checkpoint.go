@@ -7,6 +7,8 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -69,4 +71,45 @@ func updateCheckpoint(r *TeamcityReconciler, ctx context.Context, checkpointCM *
 		return nil
 	}
 	return nil
+}
+
+func DeleteCheckPoint(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) error {
+	checkpointCMName := checkpoint.ConstructCheckpointName(instance.Name)
+	checkpointCMKey := types.NamespacedName{
+		Name:      checkpointCMName,
+		Namespace: instance.Namespace,
+	}
+	checkpointCM := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      checkpointCMKey.Name,
+			Namespace: checkpointCMKey.Namespace,
+		},
+	}
+
+	if err := r.Get(ctx, checkpointCMKey, checkpointCM); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := r.Delete(ctx, checkpointCM); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func OngoingUpdateWithRO(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) bool {
+	stage, err := GetCurrentStageFromInstance(r, ctx, instance)
+	if err != nil {
+		// Handle the case where an error occurs
+		return false
+	}
+
+	if stage == checkpoint.Unknown {
+		// Handle the case where the stage could not be determined
+		return false
+	}
+	return true
 }

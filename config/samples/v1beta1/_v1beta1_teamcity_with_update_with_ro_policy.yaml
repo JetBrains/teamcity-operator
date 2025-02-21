@@ -68,8 +68,8 @@ metadata:
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
 spec:
-  image: jetbrains/teamcity-server:2024.03
-  #image: jetbrains/teamcity-server
+  image: jetbrains/teamcity-server:2024.12.2
+#  image: jetbrains/teamcity-server
   startupPropertiesConfig:
     teamcity.startup.maintenance: "false"
     teamcity.licenseAgreement.accepted: "true"
@@ -78,9 +78,9 @@ spec:
   databaseSecret:
     secret: database-properties
   dataDirVolumeClaim:
-    name: teamcity-node-volume1
+    name: teamcity-node-volume5
     volumeMount:
-      name: teamcity-node-volume1
+      name: teamcity-node-volume5
       mountPath: /storage
     spec:
       accessModes:
@@ -96,3 +96,9 @@ spec:
       requests:
         cpu: "1000m"
         memory: "2500Mi"
+      startupProbeSettings:
+        failureThreshold: 30
+        successThreshold: 1
+        periodSeconds: 20
+        initialDelaySeconds: 80
+        timeoutSeconds: 1

@@ -11,21 +11,17 @@ const (
 	ReplicaReady
 	MainShuttingDown
 	MainReady
-	ReplicaShuttingDown
-	ReplicaShutDown
 	UpdateFinished
 )
 
 const (
-	StageUnknown             = "unknown"
-	StageUpdateStarted       = "update-started"
-	StageReplicaStarting     = "replica-starting"
-	StageReplicaReady        = "replica-ready"
-	StageReplicaShuttingDown = "replica-shutting-down"
-	StageReplicaShutDown     = "replica-shut-down"
-	StageMainShuttingDown    = "main-shutting-down"
-	StageMainReady           = "main-ready"
-	StageUpdateFinished      = "update-finished"
+	StageUnknown          = "unknown"
+	StageUpdateStarted    = "update-started"
+	StageReplicaStarting  = "replica-starting"
+	StageReplicaReady     = "replica-ready"
+	StageMainShuttingDown = "main-shutting-down"
+	StageMainReady        = "main-ready"
+	StageUpdateFinished   = "update-finished"
 )
 
 func (s Stage) String() string {
@@ -36,10 +32,6 @@ func (s Stage) String() string {
 		return StageReplicaStarting
 	case ReplicaReady:
 		return StageReplicaReady
-	case ReplicaShuttingDown:
-		return StageReplicaShuttingDown
-	case ReplicaShutDown:
-		return StageReplicaShutDown
 	case MainReady:
 		return StageMainReady
 	case MainShuttingDown:
@@ -59,10 +51,6 @@ func ParseStage(stageStr string) (Stage, error) {
 		return ReplicaStarting, nil
 	case StageReplicaReady:
 		return ReplicaReady, nil
-	case StageReplicaShuttingDown:
-		return ReplicaShuttingDown, nil
-	case StageReplicaShutDown:
-		return ReplicaShutDown, nil
 	case StageMainReady:
 		return MainReady, nil
 	case StageMainShuttingDown:
