@@ -112,7 +112,9 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	if isUpdateWithRO {
+		log.V(1).Info("Running update with RO")
 		result, err := r.doUpdateWithRO(ctx, &teamcity)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -128,8 +130,6 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		if preconditionSuccess := r.validatePreconditions(ctx, builder, teamcity); !preconditionSuccess {
 			log.V(1).Info("Preconditions are not satisfied")
-			//we want to retry reconcile after preconditions will be met
-			//RequeueAfter is specified in nanoseconds :melting_face
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 		}
 
@@ -139,7 +139,8 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	if OngoingUpdateWithRO(r, ctx, &teamcity) {
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
+		log.V(1).Info("Detected an ongoing update with RO. Update request will be re-queued")
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(60000000000)}, nil
 	}
 	return ctrl.Result{}, nil
 }

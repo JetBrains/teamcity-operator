@@ -10,48 +10,57 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
 
 func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *TeamCity, currentStage checkpoint.Stage) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	switch currentStage {
 	case checkpoint.Unknown:
+		log.V(1).Info("Current update stage set to unknown")
 		result, err := HandleUnknown(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.UpdateStarted:
+		log.V(1).Info("Current update stage set to update-started")
 		result, err := HandleUpdateStarted(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.ReplicaStarting:
+		log.V(1).Info("Current update stage set to replica-starting")
 		result, err := HandleReplicaStarting(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.ReplicaReady:
+		log.V(1).Info("Current update stage set to replica-ready")
 		result, err := HandleReplicaReady(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.MainShuttingDown:
+		log.V(1).Info("Current update stage set to main-shutting-down")
 		result, err := HandleMainShuttingDown(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.MainReady:
+		log.V(1).Info("Current update stage set to main-ready")
 		result, err := HandleMainReady(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.UpdateFinished:
+		log.V(1).Info("Current update stage set to update-finished")
 		result, err := HandleUpdateFinished(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -95,7 +104,7 @@ func HandleReplicaStarting(r *TeamcityReconciler, ctx context.Context, instance 
 	if err := r.Get(ctx, roStatefulSetName, &roStatefulSet); err != nil {
 		return ctrl.Result{}, err
 	}
-	if roStatefulSet.Status.ReadyReplicas > 0 {
+	if roStatefulSet.Status.AvailableReplicas > 0 {
 		err := DoCheckpointE(r, ctx, instance, checkpoint.ReplicaReady)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -117,7 +126,8 @@ func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance
 		return ctrl.Result{}, err
 	}
 
-	if mainStatefulSet.Status.ReadyReplicas > 0 {
+	//check if we are looking at the latest generation of STS and check its available replicas
+	if mainStatefulSet.Status.AvailableReplicas > 0 && mainStatefulSet.Generation == mainStatefulSet.Status.ObservedGeneration {
 		err := DoCheckpointE(r, ctx, instance, checkpoint.MainReady)
 		if err != nil {
 			return ctrl.Result{}, err
