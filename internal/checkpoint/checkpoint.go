@@ -6,7 +6,7 @@ type Stage int64
 
 const (
 	Unknown Stage = iota
-	UpdateStarted
+	ReplicaCreated
 	ReplicaStarting
 	ReplicaReady
 	MainShuttingDown
@@ -16,7 +16,7 @@ const (
 
 const (
 	StageUnknown          = "unknown"
-	StageUpdateStarted    = "update-started"
+	StageReplicaCreated   = "replica-created"
 	StageReplicaStarting  = "replica-starting"
 	StageReplicaReady     = "replica-ready"
 	StageMainShuttingDown = "main-shutting-down"
@@ -26,8 +26,8 @@ const (
 
 func (s Stage) String() string {
 	switch s {
-	case UpdateStarted:
-		return StageUpdateStarted
+	case ReplicaCreated:
+		return StageReplicaCreated
 	case ReplicaStarting:
 		return StageReplicaStarting
 	case ReplicaReady:
@@ -45,8 +45,8 @@ func (s Stage) String() string {
 
 func ParseStage(stageStr string) (Stage, error) {
 	switch stageStr {
-	case StageUpdateStarted:
-		return UpdateStarted, nil
+	case StageReplicaCreated:
+		return ReplicaCreated, nil
 	case StageReplicaStarting:
 		return ReplicaStarting, nil
 	case StageReplicaReady:

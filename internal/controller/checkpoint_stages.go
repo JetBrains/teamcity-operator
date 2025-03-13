@@ -24,9 +24,9 @@ func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *Tea
 			return ctrl.Result{}, err
 		}
 		return result, nil
-	case checkpoint.UpdateStarted:
-		log.V(1).Info("Current update stage is update-started")
-		result, err := HandleUpdateStarted(r, ctx, instance)
+	case checkpoint.ReplicaCreated:
+		log.V(1).Info("Current update stage is replica-created")
+		result, err := HandleReplicaCreated(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -71,14 +71,13 @@ func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *Tea
 }
 
 func HandleUnknown(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
-	err := DoCheckpointE(r, ctx, instance, checkpoint.UpdateStarted)
+	err := DoCheckpointE(r, ctx, instance, checkpoint.ReplicaCreated)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{Requeue: true}, nil
 }
-func HandleUpdateStarted(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
-	//create RO node and apply it
+func HandleReplicaCreated(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
 	var mainStatefulSet v1.StatefulSet
 	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
 		return ctrl.Result{}, err
@@ -126,7 +125,6 @@ func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance
 		return ctrl.Result{}, err
 	}
 
-	//check if we are looking at the latest generation of STS and check its available replicas
 	if mainStatefulSet.Status.AvailableReplicas > 0 && mainStatefulSet.Generation == mainStatefulSet.Status.ObservedGeneration {
 		err := DoCheckpointE(r, ctx, instance, checkpoint.MainReady)
 		if err != nil {
