@@ -18,49 +18,49 @@ func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *Tea
 	log := log.FromContext(ctx)
 	switch currentStage {
 	case checkpoint.Unknown:
-		log.V(1).Info("Current update stage set to unknown")
+		log.V(1).Info("Current update stage isto unknown")
 		result, err := HandleUnknown(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.UpdateStarted:
-		log.V(1).Info("Current update stage set to update-started")
+		log.V(1).Info("Current update stage isto update-started")
 		result, err := HandleUpdateStarted(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.ReplicaStarting:
-		log.V(1).Info("Current update stage set to replica-starting")
+		log.V(1).Info("Current update stage isto replica-starting")
 		result, err := HandleReplicaStarting(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.ReplicaReady:
-		log.V(1).Info("Current update stage set to replica-ready")
+		log.V(1).Info("Current update stage isto replica-ready")
 		result, err := HandleReplicaReady(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.MainShuttingDown:
-		log.V(1).Info("Current update stage set to main-shutting-down")
+		log.V(1).Info("Current update stage isto main-shutting-down")
 		result, err := HandleMainShuttingDown(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.MainReady:
-		log.V(1).Info("Current update stage set to main-ready")
+		log.V(1).Info("Current update stage isto main-ready")
 		result, err := HandleMainReady(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return result, nil
 	case checkpoint.UpdateFinished:
-		log.V(1).Info("Current update stage set to update-finished")
+		log.V(1).Info("Current update stage isto update-finished")
 		result, err := HandleUpdateFinished(r, ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
