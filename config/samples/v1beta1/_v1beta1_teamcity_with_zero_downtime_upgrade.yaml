@@ -67,9 +67,11 @@ metadata:
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
+  annotations:
+    teamcity.jetbrains.com/update-policy: zero-downtime
 spec:
-  image: jetbrains/teamcity-server:2024.12.2
-#  image: jetbrains/teamcity-server
+#  image: jetbrains/teamcity-server:2024.12.2
+  image: jetbrains/teamcity-server
   startupPropertiesConfig:
     teamcity.startup.maintenance: "false"
     teamcity.licenseAgreement.accepted: "true"
@@ -90,8 +92,6 @@ spec:
           storage: 1Gi
   mainNode:
     name: main-node
-    annotations:
-      update-policy: update-with-ro
     spec:
       requests:
         cpu: "1000m"

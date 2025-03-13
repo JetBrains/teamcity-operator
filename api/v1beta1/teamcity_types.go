@@ -115,6 +115,9 @@ type TeamCity struct {
 	Status TeamCityStatus `json:"status,omitempty"`
 }
 
+const UpdatePolicyAnnotationKey = "teamcity.jetbrains.com/update-policy"
+const ZeroDownTimeAnnotation = "zero-downtime"
+
 //+kubebuilder:object:root=true
 
 // TeamCityList contains a list of TeamCity
@@ -142,6 +145,14 @@ func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistent
 
 func (instance *TeamCity) ServiceAccountProvided() bool {
 	return instance.Spec.ServiceAccount.Name != ""
+}
+
+func (instance *TeamCity) IsMultiNode() bool {
+	return len(instance.Spec.SecondaryNodes) < 0
+}
+
+func (instance *TeamCity) UsesZeroDownTimeUpgradePolicy() bool {
+	return instance.Annotations[UpdatePolicyAnnotationKey] == ZeroDownTimeAnnotation
 }
 
 type Ingress struct {

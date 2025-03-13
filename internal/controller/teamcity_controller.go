@@ -43,7 +43,7 @@ import (
 
 const (
 	teamcityFinalizer             = "teamcity.jetbrains.com/finalizer"
-	reconciliationRequeueInterval = 10000000000
+	reconciliationRequeueInterval = 3000000000
 )
 
 // TeamcityReconciler reconciles a TeamCity object
@@ -106,23 +106,21 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Scheme:   r.Scheme,
 		Client:   r.Client,
 	}
-	builders := resourceBuilder.ResourceBuilders()
-
-	isUpdateWithRO, err := r.roReplicaRequired(ctx, &teamcity) //need to rework this check
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if isUpdateWithRO {
-		log.V(1).Info("Running update with RO")
-		result, err := r.doUpdateWithRO(ctx, &teamcity)
+	//check if the update causes pod restart
+	//check if read-only update -> processed with stage handling starting from unknown
+	//check if multi-node cluster ->
+	isOngoingUpdate := OngoingUpdateWithRO(r, ctx, &teamcity)
+	if teamcity.UsesZeroDownTimeUpgradePolicy() || isOngoingUpdate {
+		requeue, err := r.performZeroDowntimeUpgradeOrRequeue(ctx, &teamcity, isOngoingUpdate)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if result.Requeue {
-			return result, nil
+		if requeue {
+			return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 		}
 	}
+
+	builders := resourceBuilder.ResourceBuilders()
 
 	for _, builder := range builders {
 		if _, err := r.reconcileDelete(ctx, builder); err != nil {
@@ -140,7 +138,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	if OngoingUpdateWithRO(r, ctx, &teamcity) {
 		log.V(1).Info("Detected an ongoing update with RO. Update request will be re-queued")
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(60000000000)}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -260,16 +258,16 @@ func (r *TeamcityReconciler) roReplicaRequired(ctx context.Context, instance *Te
 	return false, nil
 }
 
-func (r *TeamcityReconciler) doUpdateWithRO(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
+func (r *TeamcityReconciler) doUpdateWithReadOnlyOrRequeue(ctx context.Context, instance *TeamCity) (bool, error) {
 	currentStage, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return ctrl.Result{}, err
+			return false, err
 		}
 	}
 	result, err := HandleStageChange(r, ctx, instance, currentStage)
 	if err != nil {
-		return ctrl.Result{}, err
+		return false, err
 	}
 	return result, nil
 }
@@ -305,4 +303,27 @@ func (r *TeamcityReconciler) reconcileRoDelete(ctx context.Context, instance *Te
 	}
 	log.V(1).Info(fmt.Sprintf("Replica %s is deleted", roStatefulSet.GetName()))
 	return ctrl.Result{}, nil
+}
+
+func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Context, teamcity *TeamCity, ongoingUpdate bool) (bool, error) {
+	log := log.FromContext(ctx)
+	if teamcity.IsMultiNode() {
+		//if it will change main node and secondary nodes and if ro update is enabled
+		//start update-with-ro from a stage replica-ready
+	} else {
+		mainNodeDowntimeRequired, err := doesUpdateRequireMainNodeRecreation(r, ctx, teamcity)
+		if err != nil {
+			return false, nil
+		}
+		if mainNodeDowntimeRequired || ongoingUpdate {
+			log.V(1).Info("Running update with read-only node for a single-node TeamCity")
+			requeue, err := r.doUpdateWithReadOnlyOrRequeue(ctx, teamcity)
+			if err != nil {
+				return false, err
+			}
+			return requeue, err
+		}
+	}
+	return false, nil
+
 }

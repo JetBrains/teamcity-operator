@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	v1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 )
@@ -70,6 +72,19 @@ func isStatefulSetAvailable(sts *v1.StatefulSet) bool {
 
 func isStatefulSetNewestGeneration(sts *v1.StatefulSet) bool {
 	return sts.Generation == sts.Status.ObservedGeneration
+}
+func doesUpdateRequireMainNodeRecreation(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
+	var mainStatefulSet v1.StatefulSet
+	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if resource.ChangesRequireMainNodeRecreation(instance, &mainStatefulSet) {
+		return true, nil
+	}
+	return false, nil
 }
 
 func GetMainStatefulSetNamespacedName(instance *TeamCity) types.NamespacedName {
