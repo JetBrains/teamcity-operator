@@ -61,35 +61,23 @@ func isNodeUpdateFinished(r *TeamcityReconciler, ctx context.Context, namespaced
 	}
 	return false, nil
 }
-
-func isStatefulSetRevisionUpdated(sts *v1.StatefulSet) bool {
-	return sts.Status.CurrentRevision == sts.Status.UpdateRevision
-}
-
-func isStatefulSetAvailable(sts *v1.StatefulSet) bool {
-	return sts.Status.AvailableReplicas == 1
-}
-
 func isStatefulSetNewestGeneration(sts *v1.StatefulSet) bool {
 	return sts.Generation == sts.Status.ObservedGeneration
 }
-func doesUpdateRequireMainNodeRecreation(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	var mainStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
+
+func doesNodesUpdateChangeStatefulSetSpec(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
+	for _, node := range instance.GetAllNodes() {
+		var nodeStatefulSet v1.StatefulSet
+		if err := r.Get(ctx, node.GetNamespacedNameFromNamespace(instance.Namespace), &nodeStatefulSet); err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
 		}
-		return false, err
-	}
-	if resource.ChangesRequireMainNodeRecreation(instance, &mainStatefulSet) {
-		return true, nil
+		if resource.ChangesRequireNodeStatefulSetRestart(instance, node, &nodeStatefulSet) {
+			return true, nil
+		}
+
 	}
 	return false, nil
-}
-
-func GetMainStatefulSetNamespacedName(instance *TeamCity) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: instance.Namespace,
-		Name:      instance.Spec.MainNode.Name,
-	}
 }

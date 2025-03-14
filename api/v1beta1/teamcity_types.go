@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -84,6 +85,13 @@ type Node struct {
 	Spec        NodeSpec          `json:"spec"`
 }
 
+func (n *Node) GetNamespacedNameFromNamespace(namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      n.Name,
+		Namespace: namespace,
+	}
+}
+
 type DatabaseSecret struct {
 	Secret string `json:"secret,omitempty"`
 }
@@ -127,6 +135,10 @@ type TeamCityList struct {
 	Items           []TeamCity `json:"items"`
 }
 
+func (instance *TeamCity) GetAllNodes() []Node {
+	return append(instance.Spec.SecondaryNodes, instance.Spec.MainNode)
+}
+
 func (instance *TeamCity) StartUpPropertiesConfigProvided() bool {
 	return len(instance.Spec.StartupPropertiesConfig) != 0
 }
@@ -148,7 +160,7 @@ func (instance *TeamCity) ServiceAccountProvided() bool {
 }
 
 func (instance *TeamCity) IsMultiNode() bool {
-	return len(instance.Spec.SecondaryNodes) < 0
+	return len(instance.Spec.SecondaryNodes) > 0
 }
 
 func (instance *TeamCity) UsesZeroDownTimeUpgradePolicy() bool {

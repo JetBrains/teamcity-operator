@@ -50,9 +50,9 @@ var validMainNodeResponsibilities = allTeamCityResponsibilities
 // log is for logging in this package.
 var teamcitylog = logf.Log.WithName("teamcity-resource")
 
-func (r *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (instance *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(instance).
 		Complete()
 }
 
@@ -61,8 +61,8 @@ func (r *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
 var _ webhook.Defaulter = &TeamCity{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *TeamCity) Default() {
-	teamcitylog.Info("default", "name", r.Name)
+func (instance *TeamCity) Default() {
+	teamcitylog.Info("default", "name", instance.Name)
 
 }
 
@@ -71,18 +71,18 @@ func (r *TeamCity) Default() {
 var _ webhook.Validator = &TeamCity{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *TeamCity) ValidateCreate() (admission.Warnings, error) {
-	teamcitylog.Info("validate create", "name", r.Name)
-	if warn, err := validateCommonFields(r); err != nil {
+func (instance *TeamCity) ValidateCreate() (admission.Warnings, error) {
+	teamcitylog.Info("validate create", "name", instance.Name)
+	if warn, err := validateCommonFields(instance); err != nil {
 		return warn, err
 	}
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	teamcitylog.Info("validate update", "name", r.Name)
-	warn, err := validateCommonFields(r)
+func (instance *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+	teamcitylog.Info("validate update", "name", instance.Name)
+	warn, err := validateCommonFields(instance)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +90,8 @@ func (r *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *TeamCity) ValidateDelete() (admission.Warnings, error) {
-	teamcitylog.Info("validate delete", "name", r.Name)
+func (instance *TeamCity) ValidateDelete() (admission.Warnings, error) {
+	teamcitylog.Info("validate delete", "name", instance.Name)
 
 	return nil, nil
 }

@@ -106,10 +106,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Scheme:   r.Scheme,
 		Client:   r.Client,
 	}
-	//check if the update causes pod restart
-	//check if read-only update -> processed with stage handling starting from unknown
-	//check if multi-node cluster ->
-	isOngoingUpdate := OngoingUpdateWithRO(r, ctx, &teamcity)
+	isOngoingUpdate := OngoingZeroDowntimeUpgrade(r, ctx, &teamcity)
 	if teamcity.UsesZeroDownTimeUpgradePolicy() || isOngoingUpdate {
 		requeue, err := r.performZeroDowntimeUpgradeOrRequeue(ctx, &teamcity, isOngoingUpdate)
 		if err != nil {
@@ -136,7 +133,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
-	if OngoingUpdateWithRO(r, ctx, &teamcity) {
+	if OngoingZeroDowntimeUpgrade(r, ctx, &teamcity) {
 		log.V(1).Info("Detected an ongoing update with RO. Update request will be re-queued")
 		return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 	}
@@ -235,29 +232,6 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 	return preconditionSuccessful
 }
 
-func (r *TeamcityReconciler) roReplicaRequired(ctx context.Context, instance *TeamCity) (bool, error) {
-	var mainStatefulSet v1.StatefulSet
-	if len(instance.Spec.SecondaryNodes) != 0 {
-		return false, nil
-	}
-	if !resource.UpdateWithRo(instance.Spec.MainNode) {
-		return false, nil
-	}
-	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	if resource.ChangesRequireMainNodeRecreation(instance, &mainStatefulSet) {
-		return true, nil
-	}
-	if OngoingUpdateWithRO(r, ctx, instance) {
-		return true, nil
-	}
-	return false, nil
-}
-
 func (r *TeamcityReconciler) doUpdateWithReadOnlyOrRequeue(ctx context.Context, instance *TeamCity) (bool, error) {
 	currentStage, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
@@ -272,57 +246,20 @@ func (r *TeamcityReconciler) doUpdateWithReadOnlyOrRequeue(ctx context.Context, 
 	return result, nil
 }
 
-func (r *TeamcityReconciler) statefulSetUpdateFinished(ctx context.Context, stsKey types.NamespacedName) (bool, error) {
-	var sts v1.StatefulSet
-	if err := r.Get(ctx, stsKey, &sts); err != nil {
-		return false, err
-	}
-	finished := isStatefulSetNewestGeneration(&sts) && isStatefulSetRevisionUpdated(&sts) && isStatefulSetAvailable(&sts)
-	return finished, nil
-}
-
-func (r *TeamcityReconciler) reconcileRoDelete(ctx context.Context, instance *TeamCity) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-	var roStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, resource.GetROStatefulSetNamespacedName(instance), &roStatefulSet); err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, err
-	}
-	mainReady, err := r.statefulSetUpdateFinished(ctx, GetMainStatefulSetNamespacedName(instance))
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if !mainReady {
-		log.V(1).Info(fmt.Sprintf("Deletion of %s is pending. Waiting for main node will be ready", roStatefulSet.GetName()))
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
-	}
-	if err = r.Delete(ctx, &roStatefulSet); err != nil {
-		return ctrl.Result{}, err
-	}
-	log.V(1).Info(fmt.Sprintf("Replica %s is deleted", roStatefulSet.GetName()))
-	return ctrl.Result{}, nil
-}
-
 func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Context, teamcity *TeamCity, ongoingUpdate bool) (bool, error) {
 	log := log.FromContext(ctx)
-	if teamcity.IsMultiNode() {
-		//if it will change main node and secondary nodes and if ro update is enabled
-		//start update-with-ro from a stage replica-ready
-	} else {
-		mainNodeDowntimeRequired, err := doesUpdateRequireMainNodeRecreation(r, ctx, teamcity)
+	var err error
+	statefulSetsWillBeRestarted := false
+	if statefulSetsWillBeRestarted, err = doesNodesUpdateChangeStatefulSetSpec(r, ctx, teamcity); err != nil {
+		return false, nil
+	}
+	if statefulSetsWillBeRestarted || ongoingUpdate {
+		log.V(1).Info("Running update with read-only node for a single-node TeamCity")
+		requeue, err := r.doUpdateWithReadOnlyOrRequeue(ctx, teamcity)
 		if err != nil {
-			return false, nil
+			return false, err
 		}
-		if mainNodeDowntimeRequired || ongoingUpdate {
-			log.V(1).Info("Running update with read-only node for a single-node TeamCity")
-			requeue, err := r.doUpdateWithReadOnlyOrRequeue(ctx, teamcity)
-			if err != nil {
-				return false, err
-			}
-			return requeue, err
-		}
+		return requeue, err
 	}
 	return false, nil
 

@@ -77,7 +77,7 @@ func HandleUnknown(r *TeamcityReconciler, ctx context.Context, instance *TeamCit
 }
 func HandleReplicaCreated(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
 	var mainStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, GetMainStatefulSetNamespacedName(instance), &mainStatefulSet); err != nil {
+	if err := r.Get(ctx, instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace), &mainStatefulSet); err != nil {
 		return false, err
 	}
 	roStatefulSet := resource.BuildROStatefulSet(instance)
@@ -117,7 +117,7 @@ func HandleReplicaReady(r *TeamcityReconciler, ctx context.Context, instance *Te
 	return false, err //return true because we want resources to be update
 }
 func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	mainStatefulSetName := GetMainStatefulSetNamespacedName(instance)
+	mainStatefulSetName := instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace)
 	var mainStatefulSet v1.StatefulSet
 	if err := r.Get(ctx, mainStatefulSetName, &mainStatefulSet); err != nil {
 		return false, err

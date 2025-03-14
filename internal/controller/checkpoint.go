@@ -100,7 +100,7 @@ func DeleteCheckPoint(r *TeamcityReconciler, ctx context.Context, instance *Team
 	return nil
 }
 
-func OngoingUpdateWithRO(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) bool {
+func OngoingZeroDowntimeUpgrade(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) bool {
 	stage, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
 		// Handle the case where an error occurs

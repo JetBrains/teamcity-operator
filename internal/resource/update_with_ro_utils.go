@@ -67,11 +67,11 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	return nil
 }
 
-func ChangesRequireMainNodeRecreation(instance *TeamCity, existing *v1.StatefulSet) bool {
+func ChangesRequireNodeStatefulSetRestart(instance *TeamCity, node Node, existing *v1.StatefulSet) bool {
 	var desired v1.StatefulSet
-	ConfigureStatefulSet(instance, instance.Spec.MainNode, &desired)
+	ConfigureStatefulSet(instance, node, &desired)
 	var container v12.Container
-	ConfigureContainer(instance, instance.Spec.MainNode, &container)
+	ConfigureContainer(instance, node, &container)
 	desired.Spec.Template.Spec.Containers = []v12.Container{container}
 
 	if !equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
