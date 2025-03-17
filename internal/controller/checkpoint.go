@@ -10,11 +10,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func DoCheckpointE(r *TeamcityReconciler, ctx context.Context, instance *TeamCity, desiredStage checkpoint.Stage) (err error) {
-	desiredCheckpointCM := checkpoint.BuildCheckpoint(instance.Name, instance.Namespace, desiredStage)
-
+	log := log.FromContext(ctx)
+	desiredCheckpointCM := desiredStage.BuildCheckpointConfigMap(instance.Name, instance.Namespace)
 	currentStage, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -22,6 +23,7 @@ func DoCheckpointE(r *TeamcityReconciler, ctx context.Context, instance *TeamCit
 			if err != nil {
 				return err
 			}
+			log.V(1).Info(fmt.Sprintf("Created a new checkpoint with stage '%s'", desiredStage))
 			return nil
 		}
 		return err
@@ -35,27 +37,23 @@ func DoCheckpointE(r *TeamcityReconciler, ctx context.Context, instance *TeamCit
 	if err := updateCheckpoint(r, ctx, &desiredCheckpointCM); err != nil {
 		return err
 	}
-
+	log.V(1).Info(fmt.Sprintf("Updated checkpoint. Current stage is set to '%s'", desiredStage))
 	return nil
-
 }
 
 func GetCurrentStageFromInstance(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (checkpoint.Stage, error) {
 	checkpointCMName := checkpoint.ConstructCheckpointName(instance.Name)
+	initialStage := getInitialStageFromInstance(instance)
 	cm := &v1.ConfigMap{}
 	err := r.Get(ctx, client.ObjectKey{Namespace: instance.Namespace, Name: checkpointCMName}, cm)
 	if err != nil {
-		return checkpoint.Unknown, err
+		return initialStage, err
 	}
 	stageStr, ok := cm.Data["stage"]
 	if !ok {
-		return checkpoint.Unknown, fmt.Errorf("checkpoint ConfigMap is missing 'stage' key")
+		return initialStage, fmt.Errorf("checkpoint ConfigMap is missing 'stage' key")
 	}
-	stage, err := checkpoint.ParseStage(stageStr)
-	if err != nil {
-		return checkpoint.Unknown, err
-	}
-
+	stage := checkpoint.NewStage(stageStr)
 	return stage, err
 }
 
@@ -101,15 +99,16 @@ func DeleteCheckPoint(r *TeamcityReconciler, ctx context.Context, instance *Team
 }
 
 func OngoingZeroDowntimeUpgrade(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) bool {
-	stage, err := GetCurrentStageFromInstance(r, ctx, instance)
+	_, err := GetCurrentStageFromInstance(r, ctx, instance)
 	if err != nil {
-		// Handle the case where an error occurs
-		return false
-	}
-
-	if stage == checkpoint.Unknown {
-		// Handle the case where the stage could not be determined
 		return false
 	}
 	return true
+}
+
+func getInitialStageFromInstance(instance *TeamCity) checkpoint.Stage {
+	if instance.IsMultiNode() {
+		return checkpoint.ReplicaReady
+	}
+	return checkpoint.UpdateInitiated
 }

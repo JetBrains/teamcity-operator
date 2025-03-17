@@ -14,51 +14,45 @@ import (
 
 func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *TeamCity, currentStage checkpoint.Stage) (bool, error) {
 	log := log.FromContext(ctx)
+	log.V(1).Info("Current update stage is " + currentStage.String())
 	switch currentStage {
-	case checkpoint.Unknown:
-		log.V(1).Info("Current update stage is unknown")
-		result, err := HandleUnknown(r, ctx, instance)
+	case checkpoint.UpdateInitiated:
+		result, err := HandleUpdateInitiated(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.ReplicaCreated:
-		log.V(1).Info("Current update stage is replica-created")
 		result, err := HandleReplicaCreated(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.ReplicaStarting:
-		log.V(1).Info("Current update stage is replica-starting")
 		result, err := HandleReplicaStarting(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.ReplicaReady:
-		log.V(1).Info("Current update stage is replica-ready")
 		result, err := HandleReplicaReady(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.MainShuttingDown:
-		log.V(1).Info("Current update stage is main-shutting-down")
 		result, err := HandleMainShuttingDown(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.MainReady:
-		log.V(1).Info("Current update stage is main-ready")
 		result, err := HandleMainReady(r, ctx, instance)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
 	case checkpoint.UpdateFinished:
-		log.V(1).Info("Current update stage is update-finished")
 		result, err := HandleUpdateFinished(r, ctx, instance)
 		if err != nil {
 			return false, err
@@ -68,7 +62,7 @@ func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *Tea
 	return false, nil
 }
 
-func HandleUnknown(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
+func HandleUpdateInitiated(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
 	err := DoCheckpointE(r, ctx, instance, checkpoint.ReplicaCreated)
 	if err != nil {
 		return false, err
@@ -114,7 +108,7 @@ func HandleReplicaReady(r *TeamcityReconciler, ctx context.Context, instance *Te
 	if err != nil {
 		return false, err
 	}
-	return false, err //return true because we want resources to be update
+	return false, err
 }
 func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
 	mainStatefulSetName := instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace)

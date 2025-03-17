@@ -113,6 +113,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		if requeue {
+			log.V(1).Info("Update request will be re-queued")
 			return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 		}
 	}
@@ -134,7 +135,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
 	if OngoingZeroDowntimeUpgrade(r, ctx, &teamcity) {
-		log.V(1).Info("Detected an ongoing update with RO. Update request will be re-queued")
+		log.V(1).Info("Detected an ongoing zero-downtime update. Update request will be re-queued")
 		return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 	}
 	return ctrl.Result{}, nil
@@ -208,7 +209,7 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 
 	switch builder.(type) {
 	case *resource.SecondaryStatefulSetBuilder:
-		if len(instance.Spec.SecondaryNodes) != 0 {
+		if instance.IsMultiNode() {
 			log.V(1).Info("Checking if the main node has started before starting secondary nodes")
 			mainNodeNamespacedName := types.NamespacedName{
 				Namespace: instance.Namespace,
@@ -224,9 +225,12 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 				log.V(1).Error(err, "Unable to get revision status information of the main node")
 			}
 
+			ongoingUpdate := OngoingZeroDowntimeUpgrade(r, ctx, &instance)
+
 			log.V(1).Info(fmt.Sprintf("Newest generation: %s", strconv.FormatBool(newestGeneration)))
 			log.V(1).Info(fmt.Sprintf("Main node updated: %s", strconv.FormatBool(updated)))
-			preconditionSuccessful = newestGeneration && updated
+			log.V(1).Info(fmt.Sprintf("Ongoing update: %s", strconv.FormatBool(ongoingUpdate)))
+			preconditionSuccessful = newestGeneration && updated && !ongoingUpdate
 		}
 	}
 	return preconditionSuccessful
@@ -247,15 +251,19 @@ func (r *TeamcityReconciler) doUpdateWithReadOnlyOrRequeue(ctx context.Context, 
 }
 
 func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Context, teamcity *TeamCity, ongoingUpdate bool) (bool, error) {
-	log := log.FromContext(ctx)
 	var err error
 	statefulSetsWillBeRestarted := false
 	if statefulSetsWillBeRestarted, err = doesNodesUpdateChangeStatefulSetSpec(r, ctx, teamcity); err != nil {
 		return false, nil
 	}
 	if statefulSetsWillBeRestarted || ongoingUpdate {
-		log.V(1).Info("Running update with read-only node for a single-node TeamCity")
-		requeue, err := r.doUpdateWithReadOnlyOrRequeue(ctx, teamcity)
+		currentStage, err := GetCurrentStageFromInstance(r, ctx, teamcity)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return false, err
+			}
+		}
+		requeue, err := HandleStageChange(r, ctx, teamcity, currentStage)
 		if err != nil {
 			return false, err
 		}
