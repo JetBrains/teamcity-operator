@@ -2,8 +2,7 @@ package controller
 
 import (
 	"context"
-	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
-	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
+	. "git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -12,113 +11,123 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func HandleStageChange(r *TeamcityReconciler, ctx context.Context, instance *TeamCity, currentStage checkpoint.Stage) (bool, error) {
+func doActionBasedOnCheckpointOrRequeue(r *TeamcityReconciler, ctx context.Context, checkpoint *Checkpoint) (bool, error) {
 	log := log.FromContext(ctx)
-	log.V(1).Info("Current update stage is " + currentStage.String())
-	switch currentStage {
-	case checkpoint.UpdateInitiated:
-		result, err := HandleUpdateInitiated(r, ctx, instance)
+	log.V(1).Info("Current update stage is " + checkpoint.CurrentStage.String())
+	switch checkpoint.CurrentStage {
+	case UpdateInitiated:
+		result, err := HandleUpdateInitiated(ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.ReplicaCreated:
-		result, err := HandleReplicaCreated(r, ctx, instance)
+	case ReplicaCreated:
+		result, err := HandleReplicaCreated(r, ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.ReplicaStarting:
-		result, err := HandleReplicaStarting(r, ctx, instance)
+	case ReplicaStarting:
+		result, err := HandleReplicaStarting(r, ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.ReplicaReady:
-		result, err := HandleReplicaReady(r, ctx, instance)
+	case ReplicaReady:
+		result, err := HandleReplicaReady(ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.MainShuttingDown:
-		result, err := HandleMainShuttingDown(r, ctx, instance)
+	case MainShuttingDown:
+		result, err := HandleMainShuttingDown(r, ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.MainReady:
-		result, err := HandleMainReady(r, ctx, instance)
+	case MainReady:
+		result, err := HandleMainReady(r, ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
-	case checkpoint.UpdateFinished:
-		result, err := HandleUpdateFinished(r, ctx, instance)
+	case UpdateFinished:
+		result, err := HandleUpdateFinished(ctx, checkpoint)
 		if err != nil {
 			return false, err
 		}
 		return result, nil
+	default:
+		panic("unhandled default case")
 	}
 	return false, nil
 }
 
-func HandleUpdateInitiated(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	err := DoCheckpointE(r, ctx, instance, checkpoint.ReplicaCreated)
+func HandleUpdateInitiated(ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	err := checkpoint.DoCheckpointWithDesiredStage(ctx, ReplicaCreated)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
-func HandleReplicaCreated(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
+func HandleReplicaCreated(r *TeamcityReconciler, ctx context.Context, checkpoint *Checkpoint) (bool, error) {
 	var mainStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace), &mainStatefulSet); err != nil {
+	instance := checkpoint.Instance
+	mainNodeNamespacedName := instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace)
+	if err := r.Get(ctx, mainNodeNamespacedName, &mainStatefulSet); err != nil {
 		return false, err
 	}
-	roStatefulSet := resource.BuildROStatefulSet(instance)
+	roStatefulSet := resource.BuildROStatefulSet(&instance)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var apiError error
 		_, apiError = controllerutil.CreateOrUpdate(ctx, r.Client, roStatefulSet, func() error {
-			return resource.UpdateROStatefulSet(r.Scheme, instance, &mainStatefulSet, roStatefulSet)
+			return resource.UpdateROStatefulSet(r.Scheme, &instance, &mainStatefulSet, roStatefulSet)
 		})
 		return apiError
 	})
-
-	err = DoCheckpointE(r, ctx, instance, checkpoint.ReplicaStarting)
+	err = checkpoint.DoCheckpointWithDesiredStage(ctx, ReplicaStarting)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
-func HandleReplicaStarting(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	roStatefulSetName := resource.GetROStatefulSetNamespacedName(instance)
+func HandleReplicaStarting(r *TeamcityReconciler, ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	instance := checkpoint.Instance
+	roStatefulSetName := resource.GetROStatefulSetNamespacedName(&instance)
 	var roStatefulSet v1.StatefulSet
 	if err := r.Get(ctx, roStatefulSetName, &roStatefulSet); err != nil {
 		return false, err
 	}
 	if roStatefulSet.Status.AvailableReplicas > 0 {
-		err := DoCheckpointE(r, ctx, instance, checkpoint.ReplicaReady)
+		err := checkpoint.DoCheckpointWithDesiredStage(ctx, ReplicaReady)
 		if err != nil {
 			return false, err
 		}
 	}
 	return true, nil
 }
-func HandleReplicaReady(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	err := DoCheckpointE(r, ctx, instance, checkpoint.MainShuttingDown)
+func HandleReplicaReady(ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	err := checkpoint.DoCheckpointWithDesiredStage(ctx, MainShuttingDown)
 	if err != nil {
 		return false, err
 	}
-	return false, err
+	return false, nil
 }
-func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	mainStatefulSetName := instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace)
-	var mainStatefulSet v1.StatefulSet
-	if err := r.Get(ctx, mainStatefulSetName, &mainStatefulSet); err != nil {
+func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	instance := checkpoint.Instance
+	mainStatefulSetNamespacedName := instance.Spec.MainNode.GetNamespacedNameFromNamespace(instance.Namespace)
+
+	mainNodeUpdateFinished, err := isNodeUpdateFinished(r, ctx, mainStatefulSetNamespacedName)
+	if err != nil {
+		return false, err
+	}
+	isMainNodeStatefulSetNewestGeneration, err := isNewestGeneration(r, ctx, mainStatefulSetNamespacedName)
+	if err != nil {
 		return false, err
 	}
 
-	if mainStatefulSet.Status.AvailableReplicas > 0 && isStatefulSetNewestGeneration(&mainStatefulSet) {
-		err := DoCheckpointE(r, ctx, instance, checkpoint.MainReady)
+	if mainNodeUpdateFinished && isMainNodeStatefulSetNewestGeneration {
+		err := checkpoint.DoCheckpointWithDesiredStage(ctx, MainReady)
 		if err != nil {
 			return false, err
 		}
@@ -126,8 +135,9 @@ func HandleMainShuttingDown(r *TeamcityReconciler, ctx context.Context, instance
 	return true, nil
 
 }
-func HandleMainReady(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	roStatefulSetName := resource.GetROStatefulSetNamespacedName(instance)
+func HandleMainReady(r *TeamcityReconciler, ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	instance := checkpoint.Instance
+	roStatefulSetName := resource.GetROStatefulSetNamespacedName(&instance)
 	var roStatefulSet v1.StatefulSet
 	roExists := true
 	if err := r.Get(ctx, roStatefulSetName, &roStatefulSet); err != nil {
@@ -145,14 +155,14 @@ func HandleMainReady(r *TeamcityReconciler, ctx context.Context, instance *TeamC
 		}
 	}
 
-	err := DoCheckpointE(r, ctx, instance, checkpoint.UpdateFinished)
+	err := checkpoint.DoCheckpointWithDesiredStage(ctx, UpdateFinished)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
-func HandleUpdateFinished(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
-	err := DeleteCheckPoint(r, ctx, instance)
+func HandleUpdateFinished(ctx context.Context, checkpoint *Checkpoint) (bool, error) {
+	err := checkpoint.Delete(ctx)
 	if err != nil {
 		return false, err
 	}

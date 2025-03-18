@@ -70,8 +70,8 @@ metadata:
   annotations:
     teamcity.jetbrains.com/update-policy: zero-downtime
 spec:
-  image: jetbrains/teamcity-server:2024.12.2
-#  image: jetbrains/teamcity-server
+#  image: jetbrains/teamcity-server:2024.12.2
+  image: jetbrains/teamcity-server
   startupPropertiesConfig:
     teamcity.startup.maintenance: "false"
     teamcity.licenseAgreement.accepted: "true"
@@ -103,16 +103,16 @@ spec:
         periodSeconds: 20
         initialDelaySeconds: 80
         timeoutSeconds: 1
-#  secondaryNodes:
-#    - name: secondary-node
-#      spec:
-#        requests:
-#          cpu: "1000m"
-#          memory: "2500Mi"
-#        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
-#        startupProbeSettings:
-#          failureThreshold: 30
-#          successThreshold: 1
-#          periodSeconds: 20
-#          initialDelaySeconds: 80
-#          timeoutSeconds: 1
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+        startupProbeSettings:
+          failureThreshold: 30
+          successThreshold: 1
+          periodSeconds: 20
+          initialDelaySeconds: 80
+          timeoutSeconds: 1

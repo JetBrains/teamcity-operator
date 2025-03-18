@@ -14,10 +14,8 @@ import (
 )
 
 const (
-	RoNodeRole             = "update-with-ro"
-	RoNodePostfix          = "-update-replica"
-	UpdatePolicyAnnotation = "update-policy"
-	UpdateWithRoPolicy     = "update-with-ro"
+	RoNodeRole    = "update-with-ro"
+	RoNodePostfix = "-update-replica"
 )
 
 func BuildRoNode(instance *TeamCity, name string) Node {
@@ -78,8 +76,4 @@ func ChangesRequireNodeStatefulSetRestart(instance *TeamCity, node Node, existin
 		return true
 	}
 	return false
-}
-
-func UpdateWithRo(node Node) bool {
-	return node.Annotations[UpdatePolicyAnnotation] == UpdateWithRoPolicy
 }

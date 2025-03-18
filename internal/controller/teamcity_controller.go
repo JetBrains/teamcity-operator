@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
 	"github.com/go-logr/logr"
@@ -76,7 +77,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var teamcity TeamCity
 	var err error
 
-	if teamcity, err = GetTeamCityObjectE(r, ctx, req.NamespacedName); err != nil {
+	if teamcity, err = getTeamCityObjectE(r, ctx, req.NamespacedName); err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -106,7 +107,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Scheme:   r.Scheme,
 		Client:   r.Client,
 	}
-	isOngoingUpdate := OngoingZeroDowntimeUpgrade(r, ctx, &teamcity)
+	isOngoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, &teamcity)
 	if teamcity.UsesZeroDownTimeUpgradePolicy() || isOngoingUpdate {
 		requeue, err := r.performZeroDowntimeUpgradeOrRequeue(ctx, &teamcity, isOngoingUpdate)
 		if err != nil {
@@ -133,8 +134,8 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 	}
-	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
-	if OngoingZeroDowntimeUpgrade(r, ctx, &teamcity) {
+	_ = updateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
+	if ongoingZeroDowntimeUpgrade(r, ctx, &teamcity) {
 		log.V(1).Info("Detected an ongoing zero-downtime update. Update request will be re-queued")
 		return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
 	}
@@ -225,7 +226,7 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 				log.V(1).Error(err, "Unable to get revision status information of the main node")
 			}
 
-			ongoingUpdate := OngoingZeroDowntimeUpgrade(r, ctx, &instance)
+			ongoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, &instance)
 
 			log.V(1).Info(fmt.Sprintf("Newest generation: %s", strconv.FormatBool(newestGeneration)))
 			log.V(1).Info(fmt.Sprintf("Main node updated: %s", strconv.FormatBool(updated)))
@@ -236,20 +237,6 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 	return preconditionSuccessful
 }
 
-func (r *TeamcityReconciler) doUpdateWithReadOnlyOrRequeue(ctx context.Context, instance *TeamCity) (bool, error) {
-	currentStage, err := GetCurrentStageFromInstance(r, ctx, instance)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-	}
-	result, err := HandleStageChange(r, ctx, instance, currentStage)
-	if err != nil {
-		return false, err
-	}
-	return result, nil
-}
-
 func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Context, teamcity *TeamCity, ongoingUpdate bool) (bool, error) {
 	var err error
 	statefulSetsWillBeRestarted := false
@@ -257,13 +244,14 @@ func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Con
 		return false, nil
 	}
 	if statefulSetsWillBeRestarted || ongoingUpdate {
-		currentStage, err := GetCurrentStageFromInstance(r, ctx, teamcity)
+		currentCheckpoint := checkpoint.NewCheckpoint(r.Client, *teamcity)
+		err := currentCheckpoint.UpdateStageFromConfigMap(ctx)
 		if err != nil {
 			if !errors.IsNotFound(err) {
 				return false, err
 			}
 		}
-		requeue, err := HandleStageChange(r, ctx, teamcity, currentStage)
+		requeue, err := doActionBasedOnCheckpointOrRequeue(r, ctx, currentCheckpoint)
 		if err != nil {
 			return false, err
 		}

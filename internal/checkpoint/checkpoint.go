@@ -18,20 +18,19 @@ type Checkpoint struct {
 	Instance     TeamCity
 }
 
-func NewCheckpoint(client client.Client, instance TeamCity, currentStage string) *Checkpoint {
+func NewCheckpoint(client client.Client, instance TeamCity) *Checkpoint {
 	return &Checkpoint{
 		Client:       client,
 		Instance:     instance,
-		CurrentStage: NewStage(currentStage),
+		CurrentStage: getInitialStageFromInstance(instance),
 	}
 }
 
 func (c *Checkpoint) DoCheckpointWithDesiredStage(ctx context.Context, desiredStage Stage) error {
 	currentStage, err := c.FetchCurrentStageFromCluster(ctx)
 	if err != nil {
-		if errors.IsNotFound(err) { // if checkpoint CM does not exist we need to set an initial value and create a new CM
-			initialStage := c.getInitialStageFromInstance()
-			c.CurrentStage = initialStage
+		if errors.IsNotFound(err) {
+			c.CurrentStage = desiredStage
 			err = c.Create(ctx)
 			if err != nil {
 				return err
@@ -59,15 +58,29 @@ func (c *Checkpoint) Create(ctx context.Context) error {
 	}
 	return nil
 }
+func (c *Checkpoint) UpdateStageFromConfigMap(ctx context.Context) error {
+	stage, err := c.FetchCurrentStageFromCluster(ctx)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			initialStage := getInitialStageFromInstance(c.Instance)
+			c.CurrentStage = initialStage
+			return nil
+		}
+		return err
+	}
+	c.CurrentStage = stage
+	return nil
+}
 
 func (c *Checkpoint) FetchCurrentStageFromCluster(ctx context.Context) (Stage, error) {
+	stage := NewStage("")
 	configMap, err := c.GetConfigMap(ctx)
 	if err != nil {
-		return -1, err
+		return stage, err
 	}
-	stage, err := GetStageStringValueFromConfigMap(&configMap)
+	stage, err = GetStageStringValueFromConfigMap(&configMap)
 	if err != nil {
-		return -1, err
+		return stage, err
 	}
 	return stage, nil
 }
@@ -76,10 +89,7 @@ func (c *Checkpoint) GetConfigMap(ctx context.Context) (v1.ConfigMap, error) {
 	var configMap v1.ConfigMap
 	namespacedName := c.getNamespacedName()
 	if err := c.Client.Get(ctx, namespacedName, &configMap); err != nil {
-		if !errors.IsNotFound(err) {
-			return configMap, err
-		}
-		return configMap, nil
+		return configMap, err
 	}
 	return configMap, nil
 }
@@ -127,11 +137,4 @@ func (c *Checkpoint) toConfigMapObject() v1.ConfigMap {
 			StageConfigMapKey: c.CurrentStage.String(),
 		},
 	}
-}
-
-func (c *Checkpoint) getInitialStageFromInstance() Stage {
-	if c.Instance.IsMultiNode() {
-		return ReplicaReady
-	}
-	return UpdateInitiated
 }
