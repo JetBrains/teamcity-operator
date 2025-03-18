@@ -60,7 +60,6 @@ func doActionBasedOnCheckpointOrRequeue(r *TeamcityReconciler, ctx context.Conte
 	default:
 		panic("unhandled default case")
 	}
-	return false, nil
 }
 
 func HandleUpdateInitiated(ctx context.Context, checkpoint *Checkpoint) (bool, error) {

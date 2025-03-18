@@ -62,9 +62,6 @@ func isNodeUpdateFinished(r *TeamcityReconciler, ctx context.Context, namespaced
 	}
 	return false, nil
 }
-func isStatefulSetNewestGeneration(sts *v1.StatefulSet) bool {
-	return sts.Generation == sts.Status.ObservedGeneration
-}
 
 func doesNodesUpdateChangeStatefulSetSpec(r *TeamcityReconciler, ctx context.Context, instance *TeamCity) (bool, error) {
 	for _, node := range instance.GetAllNodes() {
