@@ -23,7 +23,6 @@ import (
 	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
-	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -87,7 +86,7 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
 	if isMarkedForDeletion {
 		log.V(1).Info("TeamCity object is marked for deletion")
-		if err := r.finalizeTeamCity(log, &teamcity); err != nil {
+		if err := r.finalizeTeamCity(ctx, &teamcity); err != nil {
 			log.V(1).Error(err, "Failed to finalize TeamCity object")
 			return ctrl.Result{}, err
 		}
@@ -155,7 +154,17 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *TeamCity) error {
+func (r *TeamcityReconciler) finalizeTeamCity(ctx context.Context, teamcity *TeamCity) error {
+	log := log.FromContext(ctx)
+	isOngoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, teamcity)
+	if isOngoingUpdate {
+		log.V(1).Info("Detected ongoing zero-downtime update. Cleaning up TeamCity's checkpoint object")
+		currentCheckpoint := checkpoint.NewCheckpoint(r.Client, *teamcity)
+		err := currentCheckpoint.Delete(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
 	return nil
 }
