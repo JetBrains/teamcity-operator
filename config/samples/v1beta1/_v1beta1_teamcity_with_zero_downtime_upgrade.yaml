@@ -1,0 +1,104 @@
+#file: noinspection YAMLSchemaValidation
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-initdb-config
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS teamcity;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      volumes:
+        - name: mysql-initdb
+          configMap:
+            name: mysql-initdb-config
+      containers:
+        - image: mysql:8
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-initdb
+              mountPath: /docker-entrypoint-initdb.d
+---
+#based on database.properties
+apiVersion: v1
+data:
+  connectionProperties.password: cGFzc3dvcmQ=
+  connectionProperties.user: cm9vdA==
+  connectionUrl: amRiYzpteXNxbDovL215c3FsLmRlZmF1bHQ6MzMwNi90ZWFtY2l0eQ==
+kind: Secret
+metadata:
+  name: database-properties
+---
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-database
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+  annotations:
+    teamcity.jetbrains.com/update-policy: zero-downtime
+spec:
+#  image: jetbrains/teamcity-server:2024.12.2
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.licenseAgreement.accepted: "true"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+    teamcity.superUser.token: "token123"
+  databaseSecret:
+    secret: database-properties
+  dataDirVolumeClaim:
+    name: teamcity-node-volume5
+    volumeMount:
+      name: teamcity-node-volume5
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      startupProbeSettings:
+        failureThreshold: 30
+        successThreshold: 1
+        periodSeconds: 20
+        initialDelaySeconds: 80
+        timeoutSeconds: 1

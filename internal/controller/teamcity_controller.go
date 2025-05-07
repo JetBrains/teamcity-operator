@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
+	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
 	"git.jetbrains.team/tch/teamcity-operator/internal/resource"
-	"github.com/go-logr/logr"
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -40,7 +41,10 @@ import (
 	"time"
 )
 
-const teamcityFinalizer = "teamcity.jetbrains.com/finalizer"
+const (
+	teamcityFinalizer             = "teamcity.jetbrains.com/finalizer"
+	reconciliationRequeueInterval = 3000000000
+)
 
 // TeamcityReconciler reconciles a TeamCity object
 type TeamcityReconciler struct {
@@ -72,14 +76,17 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var teamcity TeamCity
 	var err error
 
-	if teamcity, err = GetTeamCityObjectE(r, ctx, req.NamespacedName); err != nil {
+	if teamcity, err = getTeamCityObjectE(r, ctx, req.NamespacedName); err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	}
 
 	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
 	if isMarkedForDeletion {
 		log.V(1).Info("TeamCity object is marked for deletion")
-		if err := r.finalizeTeamCity(log, &teamcity); err != nil {
+		if err := r.finalizeTeamCity(ctx, &teamcity); err != nil {
 			log.V(1).Error(err, "Failed to finalize TeamCity object")
 			return ctrl.Result{}, err
 		}
@@ -99,6 +106,18 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Scheme:   r.Scheme,
 		Client:   r.Client,
 	}
+	isOngoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, &teamcity)
+	if teamcity.UsesZeroDownTimeUpgradePolicy() || isOngoingUpdate {
+		requeue, err := r.performZeroDowntimeUpgradeOrRequeue(ctx, &teamcity, isOngoingUpdate)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if requeue {
+			log.V(1).Info("Update request will be re-queued")
+			return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
+		}
+	}
+
 	builders := resourceBuilder.ResourceBuilders()
 
 	for _, builder := range builders {
@@ -107,16 +126,18 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		if preconditionSuccess := r.validatePreconditions(ctx, builder, teamcity); !preconditionSuccess {
 			log.V(1).Info("Preconditions are not satisfied")
-			//we want to retry reconcile after preconditions will be met
-			//RequeueAfter is specified in nanoseconds :melting_face
-			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(30000000000)}, nil
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 		}
 
 		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
-	_ = UpdateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
+	_ = updateTeamCityObjectStatusE(r, ctx, req.NamespacedName, TEAMCITY_CRD_OBJECT_SUCCESS_STATE, "Successfully reconciled TeamCity")
+	if ongoingZeroDowntimeUpgrade(r, ctx, &teamcity) {
+		log.V(1).Info("Detected an ongoing zero-downtime update. Update request will be re-queued")
+		return ctrl.Result{Requeue: true, RequeueAfter: reconciliationRequeueInterval}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -133,7 +154,17 @@ func (r *TeamcityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *TeamcityReconciler) finalizeTeamCity(log logr.Logger, teamcity *TeamCity) error {
+func (r *TeamcityReconciler) finalizeTeamCity(ctx context.Context, teamcity *TeamCity) error {
+	log := log.FromContext(ctx)
+	isOngoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, teamcity)
+	if isOngoingUpdate {
+		log.V(1).Info("Detected ongoing zero-downtime update. Cleaning up TeamCity's checkpoint object")
+		currentCheckpoint := checkpoint.NewCheckpoint(r.Client, *teamcity)
+		err := currentCheckpoint.Delete(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	log.V(1).Info("Ran finalizers TeamCity object successfully")
 	return nil
 }
@@ -188,7 +219,7 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 
 	switch builder.(type) {
 	case *resource.SecondaryStatefulSetBuilder:
-		if len(instance.Spec.SecondaryNodes) != 0 {
+		if instance.IsMultiNode() {
 			log.V(1).Info("Checking if the main node has started before starting secondary nodes")
 			mainNodeNamespacedName := types.NamespacedName{
 				Namespace: instance.Namespace,
@@ -204,10 +235,37 @@ func (r *TeamcityReconciler) validatePreconditions(ctx context.Context, builder 
 				log.V(1).Error(err, "Unable to get revision status information of the main node")
 			}
 
+			ongoingUpdate := ongoingZeroDowntimeUpgrade(r, ctx, &instance)
+
 			log.V(1).Info(fmt.Sprintf("Newest generation: %s", strconv.FormatBool(newestGeneration)))
 			log.V(1).Info(fmt.Sprintf("Main node updated: %s", strconv.FormatBool(updated)))
-			preconditionSuccessful = newestGeneration && updated
+			log.V(1).Info(fmt.Sprintf("Ongoing update: %s", strconv.FormatBool(ongoingUpdate)))
+			preconditionSuccessful = newestGeneration && updated && !ongoingUpdate
 		}
 	}
 	return preconditionSuccessful
+}
+
+func (r *TeamcityReconciler) performZeroDowntimeUpgradeOrRequeue(ctx context.Context, teamcity *TeamCity, ongoingUpdate bool) (bool, error) {
+	var err error
+	statefulSetsWillBeRestarted := false
+	if statefulSetsWillBeRestarted, err = doesNodesUpdateChangeStatefulSetSpec(r, ctx, teamcity); err != nil {
+		return false, nil
+	}
+	if statefulSetsWillBeRestarted || ongoingUpdate {
+		currentCheckpoint := checkpoint.NewCheckpoint(r.Client, *teamcity)
+		err := currentCheckpoint.UpdateStageFromConfigMap(ctx)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return false, err
+			}
+		}
+		requeue, err := doActionBasedOnCheckpointOrRequeue(r, ctx, currentCheckpoint)
+		if err != nil {
+			return false, err
+		}
+		return requeue, err
+	}
+	return false, nil
+
 }

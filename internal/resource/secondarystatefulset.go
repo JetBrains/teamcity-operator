@@ -41,7 +41,6 @@ func (builder SecondaryStatefulSetBuilder) Update(object client.Object) error {
 	statefulSpec := object.(*v1.StatefulSet)
 
 	ConfigureStatefulSet(builder.Instance, desired, statefulSpec)
-
 	var container v12.Container
 	ConfigureContainer(builder.Instance, desired, &container)
 

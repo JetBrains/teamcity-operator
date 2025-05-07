@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -84,6 +85,13 @@ type Node struct {
 	Spec        NodeSpec          `json:"spec"`
 }
 
+func (n *Node) GetNamespacedNameFromNamespace(namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      n.Name,
+		Namespace: namespace,
+	}
+}
+
 type DatabaseSecret struct {
 	Secret string `json:"secret,omitempty"`
 }
@@ -115,6 +123,9 @@ type TeamCity struct {
 	Status TeamCityStatus `json:"status,omitempty"`
 }
 
+const UpdatePolicyAnnotationKey = "teamcity.jetbrains.com/update-policy"
+const ZeroDownTimeAnnotation = "zero-downtime"
+
 //+kubebuilder:object:root=true
 
 // TeamCityList contains a list of TeamCity
@@ -122,6 +133,10 @@ type TeamCityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []TeamCity `json:"items"`
+}
+
+func (instance *TeamCity) GetAllNodes() []Node {
+	return append(instance.Spec.SecondaryNodes, instance.Spec.MainNode)
 }
 
 func (instance *TeamCity) StartUpPropertiesConfigProvided() bool {
@@ -142,6 +157,14 @@ func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistent
 
 func (instance *TeamCity) ServiceAccountProvided() bool {
 	return instance.Spec.ServiceAccount.Name != ""
+}
+
+func (instance *TeamCity) IsMultiNode() bool {
+	return len(instance.Spec.SecondaryNodes) > 0
+}
+
+func (instance *TeamCity) UsesZeroDownTimeUpgradePolicy() bool {
+	return instance.Annotations[UpdatePolicyAnnotationKey] == ZeroDownTimeAnnotation
 }
 
 type Ingress struct {
