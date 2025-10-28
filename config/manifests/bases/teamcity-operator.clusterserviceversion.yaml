@@ -1,0 +1,44 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: teamcity-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: TeamCity is the Schema for the teamcities API
+      displayName: Team City
+      kind: TeamCity
+      name: teamcities.jetbrains.com
+      version: v1beta1
+  description: Deploys TeamCity
+  displayName: teamcity-operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - teamcity
+  links:
+  - name: Teamcity Operator
+    url: https://teamcity-operator.domain
+  maturity: alpha
+  provider:
+    name: teamcity-operator
+  version: 0.0.0
