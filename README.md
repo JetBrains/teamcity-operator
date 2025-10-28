@@ -1,14 +1,8 @@
-# tch/teamcity-operator
+# TeamCity Kubernetes Operator
 
+Kubernetes operator to deploy and manage TeamCity servers. This repository contains a custom controller and custom resource definition (CRD) designed for the lifecycle (creation, upgrade, graceful shutdown) of a TeamCity server.
 
 ## Getting Started
-
-Download links:
-
-SSH clone URL: ssh://git@git.jetbrains.team/tch/teamcity-operator.git
-
-HTTPS clone URL: https://git.jetbrains.team/tch/teamcity-operator.git
-
 
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
