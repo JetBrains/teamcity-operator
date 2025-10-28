@@ -112,12 +112,4 @@ make test #finds all test files and runs ginkgo tests
 make deploy #installs controller to the selected kube context
 ```
 
-## Resources
-
-[Project epic](https://youtrack.jetbrains.com/issue/TCI-95/Design-Teamcity-Kubernetes-Operator)
-
-[Project documentation](https://jetbrains.team/p/tch/documents/folders?f=TeamCity-Kubernetes-operator-2UDmNT3mVmsn)
-
-[TeamCity project which tests and builds operator](https://cloud.teamcity.com/project/DeploymentManagement_Shared_TeamCityOperator)
-
 
