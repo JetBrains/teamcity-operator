@@ -31,7 +31,7 @@ controllerManager:
         drop:
         - ALL
     image:
-      repository: registry.jetbrains.team/p/tch/tccloud-containers/teamcity-operator
+      repository: jetbrains/teamcity-operator
       tag: latest
     resources:
       limits:

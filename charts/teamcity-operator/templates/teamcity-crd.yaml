@@ -3478,7 +3478,6 @@ spec:
                             type: integer
                         type: object
                     required:
-                    - podSecurityContext
                     - requests
                     type: object
                 required:
@@ -6604,7 +6603,6 @@ spec:
                               type: integer
                           type: object
                       required:
-                      - podSecurityContext
                       - requests
                       type: object
                   required:
@@ -6984,7 +6982,6 @@ spec:
             - dataDirVolumeClaim
             - image
             - mainNode
-            - xmxPercentage
             type: object
           status:
             description: TeamCityStatus defines the observed state of TeamCity
