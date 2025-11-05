@@ -1,115 +1,455 @@
 # TeamCity Kubernetes Operator
 
-Kubernetes operator to deploy and manage TeamCity servers. This repository contains a custom controller and custom resource definition (CRD) designed for the lifecycle (creation, upgrade, graceful shutdown) of a TeamCity server.
+TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity servers using a Custom Resource Definition (CRD).
 
-## Getting Started
+- Helm chart: charts/teamcity-operator
+- CRD group/version: jetbrains.com/v1beta1, kind: TeamCity
+- Sample manifests: config/samples/v1beta1
+- Development guide: docs/DEVELOPMENT.md
 
+## Installation
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+### Prerequisites
 
-## Prerequisites
-*If this is the first time, opening this project make sure that `go module integration` is enabled.* 
+- Kubernetes v1.26.0+
+- cert-manager installed in the cluster
+  - Tested with cert-manager v1.14.3
+  - Install example:
+    ```shell
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
+    ```
 
-This setting is responsible for automatically downloading go mods specified in `go.mod` file. It's especially useful if lines in `go.mod` are highlighted with red colour.
-![go_modules_setting.png](./docs/go_modules_setting.png)
+### Install the Operator via Helm
 
-Required go version:
-```
-go version go1.20.4
-``` 
-Required version of minikube. [Instructions for minikube setup](https://minikube.sigs.k8s.io/docs/start/)
-```
-minikube version: v1.30.1
-```
-To run locally/debug(configure *minikube* as your current context):
-```
-minikube start
-kubectl config current-context
-minikube
-```
-
-## Local webhook setup
-
-In the root of the project run the following:
-
-Setup dir for certificates(`certs` directory is already ignored in git, so it makes sense to use it):
-```bash
-mkdir -p certs
-export CAROOT=$(pwd)/certs
-```
-`mkcert` is used to manage certificates and can be installed using:
-
-**Mac**:
-```bash
-brew install mkcert
-```
-**Linux**:
-
-```bash
-curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64"
-chmod +x mkcert-v*-linux-amd64
-sudo cp mkcert-v*-linux-amd64 /usr/local/bin/mkcert
-```
-Then, a new Root CA needs to be installed and certificates are generated. Note the name that is provided. If the developer, uses `Kind` cluster instead of `minikube` then `host.docker.internal` should be used instead(or as SAN). 
-
-```bash
-mkcert -install #this command will require sudo password
-mkcert -cert-file=$CAROOT/tls.crt -key-file=$CAROOT/tls.key host.minikube.internal
-```
-This will place a few files in `certs` directory. 
-
-## Project layout
-
-```
-├── api
-│   └── v1alpha1 #structs that represent crds. run make generate to generate yaml crds into config/crd/bases folders
-├── bin 
-│   └── k8s
-│       └── 1.26.0-darwin-arm64 #results of make build
-├── cmd #contains main.go. operator's entrypoint 
-├── config #contains yaml resources for the oeprator to function
-│   ├── crd
-│   │   ├── bases
-│   │   └── patches
-│   ├── default
-│   ├── manager
-│   ├── manifests
-│   ├── prometheus #prometheus resources. normally should not be touched
-│   ├── rbac #required rbac resources
-│   ├── samples #sample yaml resource we can use for testing
-│   └── scorecard #olm. normally should not be touched
-│       ├── bases
-│       └── patches
-├── hack #contains boilerplate. normally should not be touched
-└── internal #operator's internals
-    ├── controller #contains reconciler loop
-    ├── metadata #contains functions for building labels and annotations
-    └── resource #contains builders for each resource 
-
-25 directories
-
-```
-## Run/Debug
-Use run configuration `Run controller` in Run or Debug mode.
-
-***This run configuration assumes minikube is running and context with name `minikube` exists.***
-
-## Run/Debug with webhooks
-Use run configuration `Run controller with webhooks` in Run or Debug mode.
-
-***This run configuration assumes minikube is running and context with name `minikube` exists and steps in [Local webhook setup](#local-webhook-setup) are completed***
-
-
-## Test
+Install release 0.0.19 of the chart from GitHub Releases:
 
 ```shell
-make test #finds all test files and runs ginkgo tests
+helm upgrade --install teamcity-operator \
+  -n teamcity-operator --create-namespace \
+  https://github.com/JetBrains/teamcity-operator/releases/download/0.0.19/teamcity-operator-0.0.19.tgz
 ```
 
-## Deployment
+#### Install from source
+
+From the repository root of this project:
 
 ```shell
-make deploy #installs controller to the selected kube context
+helm upgrade --install teamcity-operator \
+  -n teamcity-operator --create-namespace \
+  ./charts/teamcity-operator
 ```
+
+Verify installation:
+```shell
+kubectl get pods -n teamcity-operator
+kubectl get crd teamcities.jetbrains.com
+```
+
+## Create a TeamCity server
+
+After installing the operator, apply a TeamCity custom resource. Below are common configurations. You can find additional samples under config/samples/v1beta1.
+
+### Minimal single-node TeamCity with a data directory
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "2500Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+### Single node with a pre-configured external database
+
+```yaml
+apiVersion: v1
+data:
+  connectionProperties.password: DB_PASSWORD
+  connectionProperties.user: DB_USER
+  connectionUrl: DB_CONNECTION_STRING # format jdbc:mysql://DB_HOST:DB_PORT/SCHEMA_NAME
+kind: Secret
+metadata:
+  name: database-properties
+---
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-with-database
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  databaseSecret:
+    secret: database-properties
+  mainNode:
+    name: main-node
+    spec:
+      env:
+        AWS_DEFAULT_REGION: "eu-west-1"
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+### Single node with startup properties
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-with-startup-properties
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+### Single node with Ingress and Service
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-ingress
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  serviceList:
+    - name: main-node
+      spec:
+        selector:
+          app.kubernetes.io/name: teamcity-sample-with-ingress
+          app.kubernetes.io/component: teamcity-server
+          app.kubernetes.io/part-of: teamcity
+        ports:
+          - protocol: TCP
+            port: 8111
+            targetPort: 8111
+        clusterIP: None
+  ingressList:
+  - name: teamcity-sample-with-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/server-snippets: |
+        location / {
+          proxy_http_version 1.1;
+          proxy_set_header X-Forwarded-Host $http_host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_set_header Host $host;
+          proxy_set_header Upgrade $http_upgrade; # WebSocket support
+          proxy_set_header Connection "upgrade"; # WebSocket support
+        }
+    spec:
+      ingressClassName: nginx
+      rules:
+        - host: teamcity.mycompany.com
+          http:
+            paths:
+              - backend:
+                  service:
+                    name: main-node
+                    port:
+                      number: 8111
+                pathType: ImplementationSpecific
+```
+
+### Single node with a ServiceAccount
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-with-service-account
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  serviceAccount:
+    name: teamcity-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: AWS_ROLE
+  mainNode:
+    name: node
+    spec:
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+### Single node with init containers
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-init-containers
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+    name: main-node
+    spec:
+      initContainers:
+        - name: init-myservice
+          image: busybox:1.28
+          command: [ 'sh', '-c', "echo Hello" ]
+      requests:
+        cpu: "400m"
+        memory: "1000Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+### Multi-node: main + one secondary (read-only)
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-secondary-node-read-only
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+```
+
+### Multi-node: main with two secondary nodes with responsibilities
+
+See TeamCity multi-node responsibilities: https://www.jetbrains.com/help/teamcity/multinode-setup.html#Responsibilities
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-secondary-node
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+  secondaryNodes:
+    - name: secondary-node-0
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+    - name: secondary-node-1
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: [ "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
+```
+
+### Zero-downtime upgrades
+
+Enables a safe upgrade flow where the operator restarts or replaces nodes in a way that keeps TeamCity available. In short: it upgrades nodes one at a time and ensures at least one node is serving the UI during the process.
+
+### How it works
+
+- Single-node setup
+    - The operator temporarily creates a secondary node using the main node’s spec.
+    - Traffic keeps going to this temporary node while the main node is restarted/upgraded.
+    - After the main node is healthy again, the temporary node is removed.
+
+- Multi-node setup (main + secondaries)
+    - Nodes are upgraded sequentially (e.g., one secondary at a time, then the main), so at least one node continues to serve requests.
+    - The operator waits for a node to become healthy before moving on to the next one.
+
+### What to keep in mind
+- You annotate your `TeamCity` resource with `teamcity.jetbrains.com/update-policy: zero-downtime` to turn this on.
+- This flow assumes your deployment can support multiple nodes briefly running side-by-side (e.g., using a shared database) so the UI remains available during upgrades.
+
+
+```yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-with-zero-downtime-upgrade
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+  annotations:
+    teamcity.jetbrains.com/update-policy: zero-downtime
+spec:
+  image: jetbrains/teamcity-server
+  databaseSecret:
+    secret: database-properties
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+```
+
+## Contributing
+
+- Development and local debugging instructions have been moved to docs/DEVELOPMENT.md.
+- Issues and PRs are welcome.
 
 
