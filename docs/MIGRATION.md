@@ -19,9 +19,11 @@ High-level steps:
 3. Archive the existing TeamCity Data Directory.
 4. Prepare the existing database connection properties and store them in a Kubernetes Secret. You will reference it via the `spec.databaseSecret.secret` field of the TeamCity custom resource (CR).
 5. Create the TeamCity CR in the Kubernetes cluster.
+   - Optional: set the Main Node responsibilities in advance using `spec.mainNode.spec.responsibilities: ["MAIN_NODE", "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]` so you don’t need to assign them manually after startup.
 6. Copy the archived Data Directory into the PVC created by the Operator and referenced in `spec.dataDirVolumeClaim`.
 7. Unarchive the data into the configured Data Directory path inside the container (`/storage` by default in examples).
 8. Restart the Operator-managed TeamCity Server by deleting the Pod. Kubernetes will recreate it.
+   - Potential improvement (future operator mode): disable the “replicas = 0” mode and then start the server.
 9. First start after migration
    - If responsibilities were not changed in step 5, the Server may initially start as a Secondary TeamCity Node because the previous installation was acting as the Main Node. That’s expected if you did not restore the old main but are switching to the new Operator-managed server.
 10. Promote the new Server to be the Main Node:

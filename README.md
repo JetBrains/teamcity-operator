@@ -447,6 +447,12 @@ spec:
         memory: "2500Mi"
 ```
 
+## Migration
+
+- Migrating from an existing TeamCity installation? See docs/MIGRATION.md for two approaches:
+  - Approach 1: Move the TeamCity Data Directory to the Operator-managed PVC (simplest).
+  - Approach 2: Full backup and restore into a new, empty database.
+
 ## Contributing
 
 - Development and local debugging instructions have been moved to docs/DEVELOPMENT.md.
