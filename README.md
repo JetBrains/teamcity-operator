@@ -21,7 +21,7 @@ TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity ser
 
 ### Install the Operator via Helm
 
-Install release 0.0.19 of the chart from GitHub Releases:
+Install release 0.0.20 of the chart from GitHub Releases:
 
 ```shell
 helm upgrade --install teamcity-operator \
