@@ -298,7 +298,7 @@ spec:
           storage: 1Gi
 ```
 
-### Multi-node: main + one secondary (read-only)
+### Multi-node: main with one secondary node without responsibilities
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
