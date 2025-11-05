@@ -74,7 +74,6 @@ spec:
   image: jetbrains/teamcity-server
   startupPropertiesConfig:
     teamcity.startup.maintenance: "false"
-    teamcity.licenseAgreement.accepted: "true"
     teamcity.firstStart.setupAdmin.enabled: "false"
     teamcity.superUser.token: "token123"
   databaseSecret:
