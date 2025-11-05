@@ -26,7 +26,7 @@ Install release 0.0.20 of the chart from GitHub Releases:
 ```shell
 helm upgrade --install teamcity-operator \
   -n teamcity-operator --create-namespace \
-  https://github.com/JetBrains/teamcity-operator/releases/download/0.0.19/teamcity-operator-0.0.19.tgz
+  https://github.com/JetBrains/teamcity-operator/releases/download/0.0.20/teamcity-operator-0.0.20.tgz
 ```
 
 #### Install from source
