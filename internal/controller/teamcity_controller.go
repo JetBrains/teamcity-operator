@@ -19,6 +19,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
+
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/checkpoint"
 	"git.jetbrains.team/tch/teamcity-operator/internal/predicate"
@@ -37,8 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"strconv"
-	"time"
 )
 
 const (
@@ -61,6 +62,7 @@ type TeamcityReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
