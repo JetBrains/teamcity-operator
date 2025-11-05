@@ -49,7 +49,7 @@ kubectl get crd teamcities.jetbrains.com
 
 After installing the operator, apply a TeamCity custom resource. Below are common configurations. You can find additional samples under config/samples/v1beta1.
 
-### Minimal single-node TeamCity with a data directory
+### Standalone TeamCity Main Node with a data directory
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -80,7 +80,7 @@ spec:
           storage: 1Gi
 ```
 
-### Single node with a pre-configured external database
+### Standalone TeamCity Main Node with a pre-configured external database
 
 ```yaml
 apiVersion: v1
@@ -124,7 +124,7 @@ spec:
           storage: 1Gi
 ```
 
-### Single node with startup properties
+### Standalone TeamCity Main Node with startup properties
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -158,7 +158,7 @@ spec:
           storage: 1Gi
 ```
 
-### Single node with Ingress and Service
+### Standalone TeamCity Main Node with Ingress and Service
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -228,7 +228,7 @@ spec:
                 pathType: ImplementationSpecific
 ```
 
-### Single node with a ServiceAccount
+### Standalone TeamCity Main Node with a ServiceAccount
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -263,7 +263,7 @@ spec:
           storage: 1Gi
 ```
 
-### Single node with init containers
+### Standalone TeamCity Main Node with init containers
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -298,7 +298,7 @@ spec:
           storage: 1Gi
 ```
 
-### Multi-node: main with one secondary node without responsibilities
+### Multi-node: Main Node with one Secondary TeamCity Node without responsibilities
 
 ```yaml
 apiVersion: jetbrains.com/v1beta1
@@ -335,7 +335,7 @@ spec:
           memory: "2500Mi"
 ```
 
-### Multi-node: main with two secondary nodes with responsibilities
+### Multi-node: Main Node with two Secondary TeamCity Nodes with responsibilities
 
 See TeamCity multi-node responsibilities: https://www.jetbrains.com/help/teamcity/multinode-setup.html#Responsibilities
 
@@ -397,7 +397,7 @@ Enables a safe upgrade flow where the operator restarts or replaces nodes in a w
 
 ### How it works
 
-- Single-node setup
+- Standalone Main Node setup
     - The operator temporarily creates a secondary node using the main node’s spec.
     - Traffic keeps going to this temporary node while the main node is restarted/upgraded.
     - After the main node is healthy again, the temporary node is removed.
