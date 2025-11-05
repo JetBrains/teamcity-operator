@@ -398,12 +398,12 @@ Enables a safe upgrade flow where the operator restarts or replaces nodes in a w
 ### How it works
 
 - Standalone Main Node setup
-    - The operator temporarily creates a secondary node using the main node’s spec.
-    - Traffic keeps going to this temporary node while the main node is restarted/upgraded.
-    - After the main node is healthy again, the temporary node is removed.
+    - The operator temporarily creates a Secondary TeamCity Node using the Main Node’s spec.
+    - Traffic keeps going to this temporary node while the Main Node is restarted/upgraded.
+    - After the Main Node is healthy again, the temporary node is removed.
 
-- Multi-node setup (main + secondaries)
-    - Nodes are upgraded sequentially (e.g., one secondary at a time, then the main), so at least one node continues to serve requests.
+- Multi-node setup (Main Node + Secondary TeamCity Nodes)
+    - Nodes are upgraded sequentially (for example, one Secondary TeamCity Node at a time, then the Main Node), so at least one node continues to serve requests.
     - The operator waits for a node to become healthy before moving on to the next one.
 
 ### What to keep in mind
