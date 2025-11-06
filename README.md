@@ -49,6 +49,8 @@ kubectl get crd teamcities.jetbrains.com
 
 After installing the operator, apply a TeamCity custom resource. Below are common configurations. You can find additional samples under config/samples/v1beta1.
 
+Note: When setting CPU and memory requests/limits for nodes, consult the official TeamCity Server Requirements to estimate appropriate resources: https://www.jetbrains.com/help/teamcity/system-requirements.html#TeamCity+Server+Requirements.
+
 ### Standalone TeamCity Main Node with a data directory
 
 ```yaml
@@ -65,8 +67,8 @@ spec:
     name: main-node
     spec:
       requests:
-        cpu: "400m"
-        memory: "2500Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -109,8 +111,8 @@ spec:
       env:
         AWS_DEFAULT_REGION: "eu-west-1"
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -143,8 +145,8 @@ spec:
     name: main-node
     spec:
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -174,8 +176,8 @@ spec:
     name: main-node
     spec:
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -248,8 +250,8 @@ spec:
     name: node
     spec:
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -283,8 +285,8 @@ spec:
           image: busybox:1.28
           command: [ 'sh', '-c', "echo Hello" ]
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-data-dir
     volumeMount:
@@ -325,14 +327,14 @@ spec:
     name: main-node
     spec:
       requests:
-        cpu: "1000m"
-        memory: "2500Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   secondaryNodes:
     - name: secondary-node
       spec:
         requests:
-          cpu: "1000m"
-          memory: "2500Mi"
+          cpu: "900m"
+          memory: "1512Mi"
 ```
 
 ### Multi-node: Main Node with two Secondary TeamCity Nodes with responsibilities
@@ -369,8 +371,8 @@ spec:
       cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
     spec:
       requests:
-        cpu: "1000m"
-        memory: "2500Mi"
+        cpu: "900m"
+        memory: "1512Mi"
       responsibilities: [ "MAIN_NODE", "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
   secondaryNodes:
     - name: secondary-node-0
@@ -378,20 +380,22 @@ spec:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       spec:
         requests:
-          cpu: "1000m"
-          memory: "2500Mi"
+          cpu: "900m"
+          memory: "1512Mi"
         responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
     - name: secondary-node-1
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       spec:
         requests:
-          cpu: "1000m"
-          memory: "2500Mi"
+          cpu: "900m"
+          memory: "1512Mi"
         responsibilities: [ "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
 ```
 
 ### Zero-downtime upgrades
+
+Note: This is an experimental feature. Behavior and configuration may change between releases. We welcome feedback — please open an issue in this repository with your experience and suggestions.
 
 Enables a safe upgrade flow where the operator restarts or replaces nodes in a way that keeps TeamCity available. In short: it upgrades nodes one at a time and ensures at least one node is serving the UI during the process.
 
@@ -449,13 +453,19 @@ spec:
 
 ## Migration
 
-- Migrating from an existing TeamCity installation? See docs/MIGRATION.md for two approaches:
+- Migrating from an existing TeamCity installation? See [docs/MIGRATION.md](docs/MIGRATION.md) for two approaches:
   - Approach 1: Move the TeamCity Data Directory to the Operator-managed PVC (simplest).
   - Approach 2: Full backup and restore into a new, empty database.
 
+## Limitations
+
+- Custom volume mounts are not available; this feature is under development.
+- Mounting custom Secrets as environment variables is currently not supported.
+- Ingress integration has been tested with the NGINX Ingress Controller only.
+
 ## Contributing
 
-- Development and local debugging instructions have been moved to docs/DEVELOPMENT.md.
+- Development and local debugging instructions have been moved to [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 - Issues and PRs are welcome.
 
 

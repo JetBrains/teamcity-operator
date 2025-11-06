@@ -77,8 +77,8 @@ spec:
       env:
         AWS_DEFAULT_REGION: "eu-west-1"
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:

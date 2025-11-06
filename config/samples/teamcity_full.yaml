@@ -107,8 +107,8 @@ spec:
         runAsGroup: 1000
         fsGroup: 1000
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "900m"
+        memory: "1512Mi"
       livenessProbeSettings:
         failureThreshold: 3
         successThreshold: 1
@@ -133,8 +133,8 @@ spec:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       spec:
         requests:
-          cpu: "1000m"
-          memory: "2500Mi"
+          cpu: "900m"
+          memory: "1512Mi"
         responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
     - name: secondary-node-1
       annotations:
