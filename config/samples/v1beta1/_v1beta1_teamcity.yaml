@@ -11,8 +11,8 @@ spec:
     name: main-node
     spec:
       requests:
-        cpu: "1000m"
-        memory: "2500Mi"
+        cpu: "900m"
+        memory: "1512Mi"
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:

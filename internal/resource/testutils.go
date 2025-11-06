@@ -66,8 +66,8 @@ var (
 		},
 	}
 	requests = corev1.ResourceList{
-		"cpu":    resource.MustParse("750m"),
-		"memory": resource.MustParse("1000Mi"),
+		"cpu":    resource.MustParse("900m"),
+		"memory": resource.MustParse("1512Mi"),
 	}
 	mainNodeName         = "main-node"
 	xmxPercentage        = int64(95)
