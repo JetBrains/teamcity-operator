@@ -49,6 +49,8 @@ kubectl get crd teamcities.jetbrains.com
 
 After installing the operator, apply a TeamCity custom resource. Below are common configurations. You can find additional samples under config/samples/v1beta1.
 
+Note: When setting CPU and memory requests/limits for nodes, consult the official TeamCity Server Requirements to estimate appropriate resources: https://www.jetbrains.com/help/teamcity/system-requirements.html#TeamCity+Server+Requirements.
+
 ### Standalone TeamCity Main Node with a data directory
 
 ```yaml
@@ -449,13 +451,13 @@ spec:
 
 ## Migration
 
-- Migrating from an existing TeamCity installation? See docs/MIGRATION.md for two approaches:
+- Migrating from an existing TeamCity installation? See [docs/MIGRATION.md](docs/MIGRATION.md) for two approaches:
   - Approach 1: Move the TeamCity Data Directory to the Operator-managed PVC (simplest).
   - Approach 2: Full backup and restore into a new, empty database.
 
 ## Contributing
 
-- Development and local debugging instructions have been moved to docs/DEVELOPMENT.md.
+- Development and local debugging instructions have been moved to [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 - Issues and PRs are welcome.
 
 
