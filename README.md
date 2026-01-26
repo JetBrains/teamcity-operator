@@ -415,6 +415,9 @@ Enables a safe upgrade flow where the operator restarts or replaces nodes in a w
 - This flow assumes your deployment can support multiple nodes briefly running side-by-side (e.g., using a shared database) so the UI remains available during upgrades.
 
 
+
+
+
 ```yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
