@@ -10,8 +10,8 @@ name = "semverbot"
 prefix = ""
 
 [semver]
-patch = ["fix", "bug", "hotfix"]
-minor = ["feature"]
+patch = ["fix", "bug", "hotfix","feature"]
+minor = []
 major = ["release"]
 
 [modes]
