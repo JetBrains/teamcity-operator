@@ -417,7 +417,6 @@ Enables a safe upgrade flow where the operator restarts or replaces nodes in a w
 
 
 
-
 ```yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
