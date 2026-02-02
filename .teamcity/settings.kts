@@ -1,5 +1,6 @@
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import builds.BuildRelease
+import builds.TestBuild
 import consts.dockerHubRegistryConnectionId
 import environment.EnvironmentProvider
 import jetbrains.buildServer.configs.kotlin.*
@@ -11,6 +12,7 @@ version = "2025.11"
 project {
     vcsRoot(TeamCityOperatorVCSRoot)
     buildType(BuildRelease)
+    buildType(TestBuild)
 
     features {
         dockerRegistry {
