@@ -2,6 +2,7 @@ package builds
 
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import consts.dockerHubRegistryConnectionId
+import consts.dockerImageName
 import jetbrains.buildServer.configs.kotlin.BuildType
 import jetbrains.buildServer.configs.kotlin.FailureAction
 import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerRegistryConnections
@@ -14,8 +15,8 @@ object BuildDockerImages : BuildType({
     id("TeamCityOperatorBuildDockerImages")
 
     params {
-        param("predicted_version", "%dep.TeamCityOperatorPrepareRelease.predicted_version%")
-        param("docker_image", "%dep.TeamCityOperatorPrepareRelease.docker_image%")
+        param("predicted_version", PrepareRelease.depParamRefs["predicted_version"].toString())
+        param("docker_image", dockerImageName)
     }
 
     vcs {

@@ -1,6 +1,7 @@
 package builds
 
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
+import consts.dockerImageName
 import jetbrains.buildServer.configs.kotlin.BuildType
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
@@ -10,11 +11,6 @@ import util.BuildSteps
 object PrepareRelease : BuildType({
     name = "Prepare Release"
     id("TeamCityOperatorPrepareRelease")
-
-    params {
-        param("predicted_version", "0.0.0")
-        param("docker_image", "jetbrains/teamcity-operator")
-    }
 
     vcs {
         root(TeamCityOperatorVCSRoot)
