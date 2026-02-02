@@ -52,7 +52,7 @@ object BuildDockerImages : BuildType({
         matrix {
             param("arch", listOf(
                 value("amd64", label = "AMD64"),
-                value("arm64", label = "ARM64")
+                value("aarch64", label = "ARM64")
             ))
         }
         perfmon {}
