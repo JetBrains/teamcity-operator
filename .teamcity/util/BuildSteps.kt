@@ -1,9 +1,5 @@
 package util
 
-/**
- * Shared script content for build steps used in Test&Build and Build&Release.
- * Predict tag uses a branch-based suffix: main → plain version, other branches → -rc.%build.number%.
- */
 object BuildSteps {
 
     fun predictTagScriptContent(): String = """
