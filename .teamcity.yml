@@ -1,0 +1,36 @@
+jobs:
+  Tests:
+    name: Run tests
+    steps:
+      - type: script
+        script-content: |-
+          #!/bin/sh
+
+          go version
+          go install github.com/onsi/ginkgo/v2/ginkgo
+          make test
+          cat report.out
+        docker-image: golang:1.22.0
+  PredictTag:
+    name: Predict tag
+    steps:
+      - type: script
+        script-content: >-
+          go install github.com/restechnica/semverbot/cmd/sbot@v1.1.0
+
+          sbot update version
+
+          PREDICTED_NEXT_VERSION=$(sbot predict version)
+
+          BRANCH=%teamcity.build.branch%
+
+          BUILD_NUMBER=%build.number%
+
+          VERSION_WITH_SUFFIX="${PREDICTED_NEXT_VERSION}-rc.%build.number%"
+          
+          echo "Artifact tag is $VERSION_WITH_SUFFIX"
+          echo "##teamcity[setParameter name='predicted_version' value='$VERSION_WITH_SUFFIX']"
+        name: Run sbot
+    allow-reuse: false
+    output-parameters:
+      predicted_version: '%predicted_version%'
