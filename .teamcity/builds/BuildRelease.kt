@@ -10,6 +10,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
 import jetbrains.buildServer.configs.kotlin.buildFeatures.sshAgent
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.vcs
+import util.BuildSteps
 
 object BuildRelease : BuildType({
     name = "Build&Release"
@@ -30,23 +31,12 @@ object BuildRelease : BuildType({
         script {
             name = "Predict tag"
             id = "Predict_tag"
-            scriptContent = """
-                go install github.com/restechnica/semverbot/cmd/sbot@v1.1.0
-                sbot update version
-                PREDICTED_NEXT_VERSION=${'$'}(sbot predict version)
-                echo "Artifact tag is ${'$'}PREDICTED_NEXT_VERSION" 
-                echo "##teamcity[setParameter name='predicted_version' value='${'$'}PREDICTED_NEXT_VERSION']"
-            """.trimIndent()
+            scriptContent = BuildSteps.predictTagScriptContent()
         }
         script {
             name = "Run tests"
             id = "Run_tests"
-            scriptContent = """
-                go version
-                go install github.com/onsi/ginkgo/v2/ginkgo
-                make test
-                cat report.out
-            """.trimIndent()
+            scriptContent = BuildSteps.runTestsScriptContent()
             dockerImage = "golang:1.22.0"
         }
         script {
