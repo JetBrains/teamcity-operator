@@ -1,6 +1,7 @@
 package builds
 
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
+import consts.dockerHubRegistryConnectionId
 import environment.EnvironmentProvider
 import jetbrains.buildServer.configs.kotlin.BuildType
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
@@ -87,7 +88,7 @@ object BuildRelease : BuildType({
         }
         dockerRegistryConnections {
             loginToRegistry = on {
-                dockerRegistryId = "PROJECT_EXT_24"
+                dockerRegistryId = dockerHubRegistryConnectionId
             }
         }
         commitStatusPublisher {
