@@ -35,14 +35,20 @@ object BuildDockerImages : BuildType({
             name = "Build and push Docker image"
             id = "Build_and_push_docker_image"
             scriptContent = """
-                echo "Building for architecture: %arch%"
-                echo "Image tag: %docker_image%:%predicted_version%-%arch%"
+                AGENT_ARCH="%arch%"
+                if [ "${'$'}AGENT_ARCH" = "aarch64" ]; then
+                  DOCKER_ARCH="arm64"
+                else
+                  DOCKER_ARCH="${'$'}AGENT_ARCH"
+                fi
                 
-                # Build single-platform image natively (no cross-compile needed)
-                docker build -t %docker_image%:%predicted_version%-%arch% .
-                docker push %docker_image%:%predicted_version%-%arch%
+                echo "Building for architecture: ${'$'}AGENT_ARCH (Docker: ${'$'}DOCKER_ARCH)"
+                echo "Image tag: %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH"
                 
-                echo "##teamcity[setParameter name='docker_image_with_arch' value='%docker_image%:%predicted_version%-%arch%']"
+                docker build -t %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH .
+                docker push %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH
+                
+                echo "##teamcity[setParameter name='docker_image_with_arch' value='%docker_image%:%predicted_version%-${'$'}DOCKER_ARCH']"
             """.trimIndent()
         }
     }
