@@ -46,19 +46,9 @@ object FinalizeRelease : BuildType({
             scriptContent = """
                 echo "Creating multi-arch manifest for %docker_image%:%predicted_version%"
                 
-                # Create manifest combining both architectures
-                docker manifest create %docker_image%:%predicted_version% \
+                docker buildx imagetools create -t %docker_image%:%predicted_version% \
                     %docker_image%:%predicted_version%-amd64 \
                     %docker_image%:%predicted_version%-arm64
-                
-                # Annotate with architecture info
-                docker manifest annotate %docker_image%:%predicted_version% \
-                    %docker_image%:%predicted_version%-amd64 --os linux --arch amd64
-                docker manifest annotate %docker_image%:%predicted_version% \
-                    %docker_image%:%predicted_version%-arm64 --os linux --arch arm64
-                
-                # Push the manifest
-                docker manifest push %docker_image%:%predicted_version%
                 
                 echo "##teamcity[setParameter name='docker_image_full' value='%docker_image%:%predicted_version%']"
                 echo "Multi-arch manifest pushed successfully"

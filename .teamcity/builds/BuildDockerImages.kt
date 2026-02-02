@@ -45,8 +45,13 @@ object BuildDockerImages : BuildType({
                 echo "Building for architecture: ${'$'}AGENT_ARCH (Docker: ${'$'}DOCKER_ARCH)"
                 echo "Image tag: %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH"
                 
-                docker build -t %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH .
-                docker push %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH
+                docker buildx create --name tcbuilder --use 2>/dev/null || docker buildx use tcbuilder
+                
+                docker buildx build \
+                  --platform linux/${'$'}DOCKER_ARCH \
+                  --provenance=false \
+                  --push \
+                  -t %docker_image%:%predicted_version%-${'$'}DOCKER_ARCH .
                 
                 echo "##teamcity[setParameter name='docker_image_with_arch' value='%docker_image%:%predicted_version%-${'$'}DOCKER_ARCH']"
             """.trimIndent()
