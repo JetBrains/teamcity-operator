@@ -42,7 +42,7 @@ type TeamCitySpec struct {
 	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
 	TeamCityServerPort v1.ContainerPort `json:"TeamCityServerPort,omitempty"`
 
-	// +kubebuilder:default:={path: "/healthCheck/ready", scheme: HTTP, port: 8111}
+	// +kubebuilder:default:={path: "/healthCheck/healthy", scheme: HTTP, port: 8111}
 	ReadinessEndpoint v1.HTTPGetAction `json:"readinessEndpoint,omitempty"`
 	// +kubebuilder:default:={path: /healthCheck/healthy, scheme: HTTP, port: 8111}
 	HealthEndpoint v1.HTTPGetAction `json:"healthEndpoint,omitempty"`

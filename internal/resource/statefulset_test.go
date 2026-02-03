@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"strings"
 )
@@ -159,6 +160,62 @@ var _ = Describe("StatefulSet", func() {
 			dataDirVolumeMount := teamcityContainer.VolumeMounts[0]
 			Expect(dataDirVolumeMount.Name).To(Equal(dataDirPVC.VolumeMount.Name))
 			Expect(dataDirVolumeMount.MountPath).To(Equal(dataDirPVC.VolumeMount.MountPath))
+		})
+	})
+	Context("TeamCity with default probe endpoints", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				// Set the default readiness endpoint (as defined in kubebuilder defaults)
+				teamcity.Spec.ReadinessEndpoint = v12.HTTPGetAction{
+					Path:   "/healthCheck/healthy",
+					Scheme: v12.URISchemeHTTP,
+					Port:   intstr.FromInt32(8111),
+				}
+				teamcity.Spec.HealthEndpoint = v12.HTTPGetAction{
+					Path:   "/healthCheck/healthy",
+					Scheme: v12.URISchemeHTTP,
+					Port:   intstr.FromInt32(8111),
+				}
+			})
+		})
+		It("sets liveness probe with readiness endpoint path", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			livenessProbe := statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe
+			Expect(livenessProbe.HTTPGet).NotTo(BeNil())
+			Expect(livenessProbe.HTTPGet.Path).To(Equal("/healthCheck/healthy"))
+			Expect(livenessProbe.HTTPGet.Port.IntVal).To(Equal(int32(8111)))
+		})
+		It("sets readiness probe with readiness endpoint path", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			readinessProbe := statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe
+			Expect(readinessProbe.HTTPGet).NotTo(BeNil())
+			Expect(readinessProbe.HTTPGet.Path).To(Equal("/healthCheck/healthy"))
+			Expect(readinessProbe.HTTPGet.Port.IntVal).To(Equal(int32(8111)))
+		})
+		It("sets startup probe with health endpoint path", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			startupProbe := statefulSet.Spec.Template.Spec.Containers[0].StartupProbe
+			Expect(startupProbe.HTTPGet).NotTo(BeNil())
+			Expect(startupProbe.HTTPGet.Path).To(Equal("/healthCheck/healthy"))
+			Expect(startupProbe.HTTPGet.Port.IntVal).To(Equal(int32(8111)))
 		})
 	})
 	Context("TeamCity with init containers", func() {
