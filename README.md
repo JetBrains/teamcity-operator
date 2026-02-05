@@ -1,5 +1,6 @@
 # TeamCity Kubernetes Operator
 
+
 TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity servers using a Custom Resource Definition (CRD).
 
 - Helm chart: charts/teamcity-operator
