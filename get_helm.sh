@@ -339,4 +339,3 @@ if ! checkHelmInstalledVersion; then
 fi
 testVersion
 cleanup
-
