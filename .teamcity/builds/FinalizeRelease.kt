@@ -36,6 +36,7 @@ object FinalizeRelease : BuildType({
     triggers {
         vcs {
             branchFilter = "+:<default>"
+            triggerRules = """-:comment=\[ci skip\]:**"""
         }
     }
 
