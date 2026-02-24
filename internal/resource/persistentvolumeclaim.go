@@ -58,6 +58,12 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 	if persistentVolumeClaim.Spec.VolumeMode == nil {
 		persistentVolumeClaim.Spec.VolumeMode = desired.Spec.VolumeMode
 	}
+	if persistentVolumeClaim.Spec.DataSource == nil {
+		persistentVolumeClaim.Spec.DataSource = desired.Spec.DataSource
+	}
+	if persistentVolumeClaim.Spec.DataSourceRef == nil {
+		persistentVolumeClaim.Spec.DataSourceRef = desired.Spec.DataSourceRef
+	}
 	if err := controllerutil.SetControllerReference(builder.Instance, persistentVolumeClaim, builder.Scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)
 	}
