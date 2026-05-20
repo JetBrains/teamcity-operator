@@ -3320,6 +3320,11 @@ spec:
                         items:
                           type: string
                         type: array
+                      serviceName:
+                        description: |-
+                          ServiceName is the name of the service that governs this StatefulSet.
+                          If empty, the StatefulSet spec.serviceName will not be set.
+                        type: string
                       startupProbeSettings:
                         default:
                           failureThreshold: 15
@@ -6450,6 +6455,11 @@ spec:
                           items:
                             type: string
                           type: array
+                        serviceName:
+                          description: |-
+                            ServiceName is the name of the service that governs this StatefulSet.
+                            If empty, the StatefulSet spec.serviceName will not be set.
+                          type: string
                         startupProbeSettings:
                           default:
                             failureThreshold: 15
