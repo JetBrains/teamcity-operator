@@ -196,6 +196,9 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	current.Spec.Template.Spec.SecurityContext = &node.Spec.PodSecurityContext
 	current.Spec.Template.Spec.ServiceAccountName = instance.Spec.ServiceAccount.Name
 	current.Spec.Template.Spec.DeprecatedServiceAccount = ""
+	if node.Spec.ServiceName != "" {
+		current.Spec.ServiceName = node.Spec.ServiceName
+	}
 }
 
 func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
