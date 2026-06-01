@@ -332,6 +332,38 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
+	Context("TeamCity with serviceName", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.ServiceName = serviceNameSecondary + "-0"
+				teamcity.Spec.SecondaryNodes[1].Spec.ServiceName = serviceNameSecondary + "-1"
+			})
+		})
+		It("sets serviceName in StatefulSet spec", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for i, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(statefulSet.Spec.ServiceName).To(Equal(Instance.Spec.SecondaryNodes[i].Spec.ServiceName))
+			}
+		})
+		It("allows multiple secondary nodes to use the same serviceName", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+
+			sharedServiceName := "shared-secondary-svc"
+			Instance.Spec.SecondaryNodes[0].Spec.ServiceName = sharedServiceName
+			Instance.Spec.SecondaryNodes[1].Spec.ServiceName = sharedServiceName
+
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(statefulSet.Spec.ServiceName).To(Equal(sharedServiceName))
+			}
+		})
+	})
 	Context("TeamCity with extra env variables", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {

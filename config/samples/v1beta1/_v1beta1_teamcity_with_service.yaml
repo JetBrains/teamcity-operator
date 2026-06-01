@@ -19,7 +19,7 @@ spec:
           requests:
             storage: 1Gi
   serviceList:
-    - name: tc-sample-svc
+    - name: tc-sample-one-svc
       spec:
         selector:
           app.kubernetes.io/name: teamcity-sample-with-svc
@@ -33,11 +33,20 @@ spec:
   mainNode:
     name: node
     spec:
+      serviceName: tc-sample-one-svc
       env:
         AWS_DEFAULT_REGION: "eu-west-1"
       requests:
         cpu: "400m"
         memory: "1000Mi"
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        serviceName: tc-sample-one-svc
+        requests:
+          cpu: "400m"
+          memory: "1000Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES"]
   dataDirVolumeClaim:
     name: teamcity-node-volume1
     volumeMount:
