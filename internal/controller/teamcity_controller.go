@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -52,6 +54,7 @@ type TeamcityReconciler struct {
 	client.Client
 	Clientset *kubernetes.Clientset
 	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=jetbrains.com,resources=teamcities,verbs=get;list;watch;create;update;patch;delete
@@ -63,6 +66,7 @@ type TeamcityReconciler struct {
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -131,7 +135,12 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Duration(reconciliationRequeueInterval)}, nil
 		}
 
-		if _, err := r.reconcileCreateOrUpdate(ctx, builder); err != nil {
+		if _, err := r.reconcileCreateOrUpdate(ctx, builder, &teamcity, req.NamespacedName); err != nil {
+			var recreateBlocked *StatefulSetRecreateBlockedError
+			if stderrors.As(err, &recreateBlocked) {
+				r.reportRecreateBlocked(ctx, &teamcity, recreateBlocked)
+				return ctrl.Result{}, nil
+			}
 			return ctrl.Result{}, err
 		}
 	}
@@ -171,13 +180,19 @@ func (r *TeamcityReconciler) finalizeTeamCity(ctx context.Context, teamcity *Tea
 	return nil
 }
 
-func (r *TeamcityReconciler) reconcileCreateOrUpdate(ctx context.Context, builder resource.ResourceBuilder) (ctrl.Result, error) {
+func (r *TeamcityReconciler) reconcileCreateOrUpdate(ctx context.Context, builder resource.ResourceBuilder, instance *TeamCity, namespacedName types.NamespacedName) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	objectList, err := builder.BuildObjectList()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	for _, object := range objectList {
+		if result, err := r.reconcileStatefulSetBeforeCreateOrUpdate(ctx, instance, builder, object); err != nil {
+			return ctrl.Result{}, err
+		} else if result.Requeue || result.RequeueAfter > 0 {
+			return result, nil
+		}
+
 		var operationResult controllerutil.OperationResult
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			var apiError error
@@ -188,7 +203,13 @@ func (r *TeamcityReconciler) reconcileCreateOrUpdate(ctx context.Context, builde
 		})
 
 		if err != nil {
-			log.V(1).Error(err, fmt.Sprintf("Failed to update object %s %s", object.GetObjectKind().GroupVersionKind().Kind, object.GetName()))
+			if blocked, ok := r.statefulSetRecreateBlockedFromAPIError(ctx, instance, builder, object, err); ok {
+				return ctrl.Result{}, blocked
+			}
+			log.Error(err, "Failed to update object",
+				"kind", object.GetObjectKind().GroupVersionKind().Kind,
+				"name", object.GetName(),
+			)
 			return ctrl.Result{}, err
 		}
 		log.V(1).Info(fmt.Sprintf("Status of object %s %s is now %s", object.GetObjectKind().GroupVersionKind().Kind, object.GetName(), operationResult))

@@ -130,6 +130,9 @@ type TeamCity struct {
 const UpdatePolicyAnnotationKey = "teamcity.jetbrains.com/update-policy"
 const ZeroDownTimeAnnotation = "zero-downtime"
 
+const AllowStsRecreateAnnotationKey = "teamcity.jetbrains.com/allow-sts-recreate"
+const AllowStsRecreateAnnotationValue = "true"
+
 //+kubebuilder:object:root=true
 
 // TeamCityList contains a list of TeamCity
@@ -169,6 +172,30 @@ func (instance *TeamCity) IsMultiNode() bool {
 
 func (instance *TeamCity) UsesZeroDownTimeUpgradePolicy() bool {
 	return instance.Annotations[UpdatePolicyAnnotationKey] == ZeroDownTimeAnnotation
+}
+
+func (instance *TeamCity) AllowsStatefulSetRecreate() bool {
+	return instance.Annotations[AllowStsRecreateAnnotationKey] == AllowStsRecreateAnnotationValue
+}
+
+func ServiceNameChangedInSpec(old, updated *TeamCity) bool {
+	if old.Spec.MainNode.Spec.ServiceName != updated.Spec.MainNode.Spec.ServiceName {
+		return true
+	}
+
+	oldSecondaryServiceNames := make(map[string]string, len(old.Spec.SecondaryNodes))
+	for _, node := range old.Spec.SecondaryNodes {
+		oldSecondaryServiceNames[node.Name] = node.Spec.ServiceName
+	}
+
+	for _, node := range updated.Spec.SecondaryNodes {
+		oldServiceName, exists := oldSecondaryServiceNames[node.Name]
+		if exists && oldServiceName != node.Spec.ServiceName {
+			return true
+		}
+	}
+
+	return false
 }
 
 type Ingress struct {

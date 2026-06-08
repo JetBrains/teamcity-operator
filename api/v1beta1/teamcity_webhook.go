@@ -82,10 +82,31 @@ func (instance *TeamCity) ValidateCreate() (admission.Warnings, error) {
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (instance *TeamCity) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	teamcitylog.Info("validate update", "name", instance.Name)
+	oldTeamCity, ok := old.(*TeamCity)
+	if !ok {
+		return nil, fmt.Errorf("expected a TeamCity object but got %T", old)
+	}
+
 	warn, err := validateCommonFields(instance)
 	if err != nil {
 		return nil, err
 	}
+
+	if ServiceNameChangedInSpec(oldTeamCity, instance) {
+		if !instance.AllowsStatefulSetRecreate() {
+			return nil, fmt.Errorf(
+				"changing spec.*.serviceName on an existing TeamCity requires annotation %s=%q. "+
+					"Kubernetes does not allow StatefulSet spec.serviceName to be updated in place; "+
+					"with the annotation, the operator will delete and recreate the affected StatefulSet(s) and restart the node(s)",
+				AllowStsRecreateAnnotationKey,
+				AllowStsRecreateAnnotationValue,
+			)
+		}
+		warn = append(warn, admission.Warnings{
+			"spec.*.serviceName changed: the affected StatefulSet(s) will be recreated and the node(s) restarted",
+		}...)
+	}
+
 	return warn, nil
 }
 
