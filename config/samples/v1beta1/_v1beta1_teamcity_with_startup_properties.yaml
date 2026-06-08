@@ -1,3 +1,11 @@
+# TeamCity with startup properties ConfigMap.
+#
+# spec.startupPropertiesConfig entries are written to TeamCity startup properties
+# before first start — useful for disabling maintenance mode, skipping admin setup,
+# or setting a super-user token in non-production environments.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_startup_properties.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:

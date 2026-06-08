@@ -1,3 +1,14 @@
+# Zero-downtime upgrade: main + secondary nodes (experimental).
+#
+# Same bundled MySQL stack as _v1beta1_teamcity_with_zero_downtime_upgrade.yaml,
+# but with a multi-node layout (teamcity-sample-secondary-zero-downtime) and
+# responsibilities split between main and secondary nodes.
+# Enables sequential rolling upgrades across secondary nodes, then the main node.
+#
+#   metadata.annotations.teamcity.jetbrains.com/update-policy: zero-downtime
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_secondary_node_with_zero_downtime_upgrade.yaml
 #file: noinspection YAMLSchemaValidation
 apiVersion: v1
 kind: Service
@@ -63,7 +74,7 @@ metadata:
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
-  name: teamcity-sample-with-database
+  name: teamcity-sample-secondary-zero-downtime
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
@@ -95,7 +106,7 @@ spec:
       requests:
         cpu: "1000m"
         memory: "2500Mi"
-      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
       startupProbeSettings:
         failureThreshold: 30
         successThreshold: 1
@@ -108,7 +119,7 @@ spec:
         requests:
           cpu: "1000m"
           memory: "2500Mi"
-        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]
         startupProbeSettings:
           failureThreshold: 30
           successThreshold: 1

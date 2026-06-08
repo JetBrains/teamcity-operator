@@ -1,3 +1,10 @@
+# TeamCity with nodeSelector on the main node.
+#
+# Sets spec.mainNode.spec.nodeSelector to schedule the main node pod onto nodes
+# matching the given labels (kubernetes.io/os: linux in this example).
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_node_selector.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:

@@ -1,3 +1,17 @@
+# Zero-downtime upgrade: single main node (experimental).
+#
+# Bundled MySQL + database Secret + TeamCity (teamcity-sample-zero-downtime) with:
+#
+#   metadata.annotations.teamcity.jetbrains.com/update-policy: zero-downtime
+#
+# When the server image or spec changes, the operator upgrades nodes one at a time
+# so at least one node keeps serving the UI. Requires a shared database (included
+# here as demo MySQL). Extended startupProbeSettings give nodes time to join.
+#
+# See README.md "Zero-downtime upgrades" for behavior details.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_zero_downtime_upgrade.yaml
 #file: noinspection YAMLSchemaValidation
 apiVersion: v1
 kind: Service
@@ -63,7 +77,7 @@ metadata:
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
-  name: teamcity-sample-with-database
+  name: teamcity-sample-zero-downtime
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"

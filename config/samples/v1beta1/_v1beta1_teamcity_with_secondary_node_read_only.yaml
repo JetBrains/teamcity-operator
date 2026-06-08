@@ -1,3 +1,11 @@
+# Multi-node TeamCity: secondary node without responsibilities (read-only).
+#
+# Deploys a main node plus a secondary node that omits spec.responsibilities.
+# The secondary joins the cluster but does not take on build or UI workload roles.
+# Includes databaseSecret for an external/shared database.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_secondary_node_read_only.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:

@@ -1,3 +1,15 @@
+# Full-featured TeamCity sample (multi-document).
+#
+# Bundled MySQL + database Secret plus a TeamCity CR that combines many options:
+# startup properties, database secret, init containers, probe tuning, xmxPercentage,
+# custom health/readiness endpoints, secondary nodes with responsibilities,
+# extra PVCs, headless service, and Ingress.
+#
+# Use as a reference when composing several features in one deployment. For focused
+# examples of individual features, prefer the _v1beta1_teamcity_with_*.yaml samples.
+#
+# Apply:
+#   kubectl apply -f config/samples/teamcity_full.yaml
 #file: noinspection YAMLSchemaValidation
 apiVersion: v1
 kind: Service
@@ -135,7 +147,7 @@ spec:
         requests:
           cpu: "900m"
           memory: "1512Mi"
-        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES"]
     - name: secondary-node-1
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
@@ -143,7 +155,7 @@ spec:
         requests:
           cpu: "1000m"
           memory: "2500Mi"
-        responsibilities: [ "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
+        responsibilities: ["CAN_PROCESS_BUILD_TRIGGERS"]
   dataDirVolumeClaim:
     name: datadir
     volumeMount:

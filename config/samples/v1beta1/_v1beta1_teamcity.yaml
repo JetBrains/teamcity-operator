@@ -1,3 +1,10 @@
+# Minimal single-node TeamCity.
+#
+# Deploys one main node with a data-directory PVC. No database secret, services,
+# or secondary nodes — suitable as the smallest starting point or for local testing.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
