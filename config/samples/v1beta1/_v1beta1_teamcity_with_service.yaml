@@ -2,8 +2,6 @@ apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
   name: teamcity-sample-with-svc
-  annotations:
-    "teamcity.jetbrains.com/allow-sts-recreate": "true"
   namespace: default
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
@@ -36,7 +34,6 @@ spec:
     name: node
     spec:
       serviceName: tc-sample-one-svc
-      responsibilities: [ "MAIN_NODE", "CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
       env:
         AWS_DEFAULT_REGION: "eu-west-1"
       requests:
