@@ -37,11 +37,11 @@ object TestBuild : BuildType({
     }
 
     triggers {
-        // Builds are queued by GitHub Actions (push to main, pull_request_target, /test)
-        // via REST API. VCS trigger stays off to avoid duplicate runs.
+        // main: VCS trigger on push (commit status published by commitStatusPublisher).
+        // PRs (incl. forks): queued by GitHub Actions via pull/<number> — see trigger-pr-build.yaml.
         vcs {
             branchFilter = """
-                -:*
+                +:refs/heads/main
             """.trimIndent()
         }
     }
