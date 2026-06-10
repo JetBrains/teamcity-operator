@@ -1,14 +1,11 @@
 name: Trigger TeamCity tests
 
-# Queues TeamCity Test&Build for pull requests (including forks) using branch pull/<number>.
-# Pushes to main are handled by the TeamCity VCS trigger on TestBuild — not this workflow.
+# Queues TeamCity Test&Build only when someone comments /test on a pull request.
+# Uses branch pull/<number> (required for fork PRs). TeamCity VCS trigger is disabled.
 #
 # TeamCity must have the Pull Requests build feature enabled (see .teamcity/builds/TestBuild.kt).
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
-    branches: [main]
   issue_comment:
     types: [created, edited]
 
@@ -19,9 +16,7 @@ jobs:
     permissions:
       pull-requests: read
       issues: write
-    if: |
-      github.event_name == 'pull_request_target' ||
-      (github.event.issue.pull_request && contains(github.event.comment.body, '/test'))
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/test')
     outputs:
       build_id: ${{ steps.trigger.outputs.build_id }}
       build_url: ${{ steps.trigger.outputs.build_url }}
@@ -31,23 +26,17 @@ jobs:
         env:
           TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          AUTHOR: ${{ github.event.comment.user.login || github.actor }}
-          EVENT: ${{ github.event_name }}
-          PR_NUM_TARGET: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.comment.user.login }}
           ISSUE_NUM: ${{ github.event.issue.number }}
         run: |
-          if [ "$EVENT" = "pull_request_target" ]; then
-            PR_NUM="$PR_NUM_TARGET"
-          else
-            PERM=$(curl -s -H "Authorization: Bearer $TOKEN" \
-              "https://api.github.com/repos/$REPO/collaborators/$AUTHOR/permission" | jq -r '.permission // empty')
-            [ "$PERM" = "admin" ] || {
-              echo "::error::Only repository admins can trigger /test. User '$AUTHOR' has permission: ${PERM:-none}."
-              exit 1
-            }
-            PR_NUM="$ISSUE_NUM"
-          fi
+          PERM=$(curl -s -H "Authorization: Bearer $TOKEN" \
+            "https://api.github.com/repos/$REPO/collaborators/$AUTHOR/permission" | jq -r '.permission // empty')
+          [ "$PERM" = "admin" ] || {
+            echo "::error::Only repository admins can trigger /test. User '$AUTHOR' has permission: ${PERM:-none}."
+            exit 1
+          }
 
+          PR_NUM="$ISSUE_NUM"
           [ -n "$PR_NUM" ] || { echo "::error::Could not resolve pull request number"; exit 1; }
 
           echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
@@ -85,8 +74,7 @@ jobs:
           echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
           echo "build_url=$BASE/viewLog.html?buildId=$BUILD_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Comment build link on manual /test
-        if: github.event_name == 'issue_comment'
+      - name: Comment build link
         env:
           GITHUB_TOKEN: ${{ github.token }}
           BUILD_URL: ${{ steps.trigger.outputs.build_url }}
