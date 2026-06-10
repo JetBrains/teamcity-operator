@@ -17,7 +17,7 @@ object TestBuild : BuildType({
     vcs {
         root(TeamCityOperatorVCSRoot)
         branchFilter = """
-            +:refs/pull/*
+            +:pull/*
             +:refs/heads/main
         """.trimIndent()
     }
@@ -37,11 +37,10 @@ object TestBuild : BuildType({
     }
 
     triggers {
-        // main: VCS trigger on push (commit status published by commitStatusPublisher).
-        // PRs (incl. forks): queued by GitHub Actions via pull/<number> — see trigger-pr-build.yaml.
+        // No automatic builds. Tests are queued only via GitHub Actions on /test comment.
         vcs {
             branchFilter = """
-                +:refs/heads/main
+                -:*
             """.trimIndent()
         }
     }
