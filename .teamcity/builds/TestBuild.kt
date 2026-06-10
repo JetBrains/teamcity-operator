@@ -1,13 +1,11 @@
 package builds
 
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
-import consts.dockerHubRegistryConnectionId
-import environment.EnvironmentProvider
 import jetbrains.buildServer.configs.kotlin.BuildType
+import jetbrains.buildServer.configs.kotlin.buildFeatures.PullRequests
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
-import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerRegistryConnections
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
-import jetbrains.buildServer.configs.kotlin.buildFeatures.sshAgent
+import jetbrains.buildServer.configs.kotlin.buildFeatures.pullRequests
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.vcs
 import util.BuildSteps
@@ -18,6 +16,10 @@ object TestBuild : BuildType({
 
     vcs {
         root(TeamCityOperatorVCSRoot)
+        branchFilter = """
+            +:refs/pull/*
+            +:refs/heads/main
+        """.trimIndent()
     }
 
     steps {
@@ -35,15 +37,25 @@ object TestBuild : BuildType({
     }
 
     triggers {
+        // main: VCS trigger on push (commit status published by commitStatusPublisher).
+        // PRs (incl. forks): queued by GitHub Actions via pull/<number> — see trigger-pr-build.yaml.
         vcs {
             branchFilter = """
-                -:*
+                +:refs/heads/main
             """.trimIndent()
         }
     }
 
     features {
         perfmon {}
+        pullRequests {
+            vcsRootExtId = TeamCityOperatorVCSRoot.id?.toString()
+            provider = github {
+                authType = vcsRoot()
+                filterTargetBranch = "+:refs/heads/main"
+                filterAuthorRole = PullRequests.GitHubRoleFilter.EVERYBODY
+            }
+        }
         commitStatusPublisher {
             vcsRootExtId = TeamCityOperatorVCSRoot.id?.toString()
             publisher = github {

@@ -1,6 +1,14 @@
-name: Trigger TeamCity on /test
+name: Trigger TeamCity tests
+
+# Queues TeamCity Test&Build for pull requests (including forks) using branch pull/<number>.
+# Pushes to main are handled by the TeamCity VCS trigger on TestBuild — not this workflow.
+#
+# TeamCity must have the Pull Requests build feature enabled (see .teamcity/builds/TestBuild.kt).
 
 on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
   issue_comment:
     types: [created, edited]
 
@@ -11,27 +19,40 @@ jobs:
     permissions:
       pull-requests: read
       issues: write
-      contents: write
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/test')
+    if: |
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request && contains(github.event.comment.body, '/test'))
     outputs:
       build_id: ${{ steps.trigger.outputs.build_id }}
       build_url: ${{ steps.trigger.outputs.build_url }}
     steps:
-      - name: Validate and get PR branch
+      - name: Resolve PR number and TeamCity branch
         id: pr
+        env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.comment.user.login || github.actor }}
+          EVENT: ${{ github.event_name }}
+          PR_NUM_TARGET: ${{ github.event.pull_request.number }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
         run: |
-          TOKEN="${{ github.token }}"
-          REPO="${{ github.repository }}"
-          AUTHOR="${{ github.event.comment.user.login }}"
-          PR_NUM="${{ github.event.issue.number }}"
+          if [ "$EVENT" = "pull_request_target" ]; then
+            PR_NUM="$PR_NUM_TARGET"
+          else
+            PERM=$(curl -s -H "Authorization: Bearer $TOKEN" \
+              "https://api.github.com/repos/$REPO/collaborators/$AUTHOR/permission" | jq -r '.permission // empty')
+            [ "$PERM" = "admin" ] || {
+              echo "::error::Only repository admins can trigger /test. User '$AUTHOR' has permission: ${PERM:-none}."
+              exit 1
+            }
+            PR_NUM="$ISSUE_NUM"
+          fi
 
-          PERM=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/$REPO/collaborators/$AUTHOR/permission" | jq -r '.permission // empty')
-          [ "$PERM" = "admin" ] || { echo "::error::Only repository owners can trigger this. User '$AUTHOR' has permission: ${PERM:-none}."; exit 1; }
+          [ -n "$PR_NUM" ] || { echo "::error::Could not resolve pull request number"; exit 1; }
 
-          BRANCH=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/$REPO/pulls/$PR_NUM" | jq -r '.head.ref // empty')
-          [ -n "$BRANCH" ] || { echo "::error::Could not get PR head branch"; exit 1; }
-
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "teamcity_branch=pull/$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "Triggering TeamCity for PR #$PR_NUM (branch pull/$PR_NUM)"
 
       - name: Trigger TeamCity pipeline
         id: trigger
@@ -39,21 +60,40 @@ jobs:
           TEAMCITY_SERVER_URL: ${{ vars.TEAMCITY_SERVER_URL }}
           TEAMCITY_PIPELINE_ID: ${{ vars.TEAMCITY_PIPELINE_ID }}
           TEAMCITY_TOKEN: ${{ secrets.TEAMCITY_TOKEN }}
-          BRANCH_NAME: ${{ steps.pr.outputs.branch }}
+          BRANCH_NAME: ${{ steps.pr.outputs.teamcity_branch }}
         run: |
           [ -n "$TEAMCITY_SERVER_URL" ] && [ -n "$TEAMCITY_PIPELINE_ID" ] && [ -n "$TEAMCITY_TOKEN" ] || \
             { echo "::error::Set TEAMCITY_SERVER_URL, TEAMCITY_PIPELINE_ID (variables) and TEAMCITY_TOKEN (secret)."; exit 1; }
 
           BASE="${TEAMCITY_SERVER_URL%/}"
-          BODY=$(jq -n --arg id "$TEAMCITY_PIPELINE_ID" --arg branch "$BRANCH_NAME" '{ buildType: { id: $id }, branchName: $branch }')
+          BODY=$(jq -n --arg id "$TEAMCITY_PIPELINE_ID" --arg branch "$BRANCH_NAME" \
+            '{ buildType: { id: $id }, branchName: $branch }')
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
-            -H "Content-Type: application/json" -H "Accept: application/json" -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
+            -H "Content-Type: application/json" -H "Accept: application/json" \
+            -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY_JSON=$(echo "$RESPONSE" | sed '$d')
 
-          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || { echo "::error::TeamCity trigger failed (HTTP $HTTP_CODE)"; echo "$BODY_JSON"; exit 1; }
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || {
+            echo "::error::TeamCity trigger failed (HTTP $HTTP_CODE)"
+            echo "$BODY_JSON"
+            exit 1
+          }
           BUILD_ID=$(echo "$BODY_JSON" | jq -r '.id // empty')
           [ -n "$BUILD_ID" ] || { echo "::error::Could not parse build id"; echo "$BODY_JSON"; exit 1; }
 
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "build_url=$BASE/viewLog.html?buildId=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "build_url=$BASE/viewLog.html?buildId=$BUILD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Comment build link on manual /test
+        if: github.event_name == 'issue_comment'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUILD_URL: ${{ steps.trigger.outputs.build_url }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUM/comments" \
+            -d "$(jq -n --arg body "TeamCity build queued: $BUILD_URL" '{ body: $body }')"
