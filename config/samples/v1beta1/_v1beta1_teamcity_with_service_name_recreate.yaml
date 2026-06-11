@@ -1,19 +1,29 @@
-# TeamCity with headless service + per-node serviceName (new deployment).
+# TeamCity with headless service + per-node serviceName.
 #
-# Demonstrates spec.serviceList (clusterIP: None) and spec.*.serviceName so each
-# StatefulSet pod gets a stable DNS name under the headless service.
+# Use this sample when adding or changing spec.*.serviceName on a TeamCity that is
+# already running (StatefulSet already exists without that serviceName).
 #
-# Use this when creating a TeamCity that already includes serviceName. For adding
-# or changing serviceName on an existing deployment, see
-# _v1beta1_teamcity_with_service_name_recreate.yaml (requires allow-sts-recreate).
+# Kubernetes treats StatefulSet.spec.serviceName as immutable. The operator therefore
+# requires an explicit opt-in before it deletes and recreates affected StatefulSets:
+#
+#   metadata.annotations.teamcity.jetbrains.com/allow-sts-recreate: "true"
+#
+# Workflow for an existing deployment:
+#   1. kubectl annotate teamcity <name> teamcity.jetbrains.com/allow-sts-recreate=true
+#   2. kubectl patch/edit the TeamCity and set spec.mainNode.spec.serviceName (and/or secondary)
+#   3. The operator recreates the StatefulSet(s) and restarts the node(s)
+#
+# For a brand-new TeamCity created with serviceName already set, the annotation is not required.
 #
 # Apply:
-#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_service.yaml
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_service_name_recreate.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
-  name: teamcity-sample-with-svc
+  name: teamcity-sample-with-svc-recreate
   namespace: default
+  annotations:
+    teamcity.jetbrains.com/allow-sts-recreate: "true"
   finalizers:
     - "teamcity.jetbrains.com/finalizer"
 spec:
@@ -30,10 +40,10 @@ spec:
           requests:
             storage: 1Gi
   serviceList:
-    - name: tc-sample-one-svc
+    - name: tc-sample-recreate-svc
       spec:
         selector:
-          app.kubernetes.io/name: teamcity-sample-with-svc
+          app.kubernetes.io/name: teamcity-sample-with-svc-recreate
           app.kubernetes.io/component: teamcity-server
           app.kubernetes.io/part-of: teamcity
         ports:
@@ -44,7 +54,7 @@ spec:
   mainNode:
     name: node
     spec:
-      serviceName: tc-sample-one-svc
+      serviceName: tc-sample-recreate-svc
       env:
         AWS_DEFAULT_REGION: "eu-west-1"
       requests:
@@ -54,7 +64,7 @@ spec:
   secondaryNodes:
     - name: secondary-node
       spec:
-        serviceName: tc-sample-one-svc
+        serviceName: tc-sample-recreate-svc
         requests:
           cpu: "400m"
           memory: "1000Mi"

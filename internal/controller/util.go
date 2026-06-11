@@ -26,7 +26,7 @@ func updateTeamCityObjectStatusE(r *TeamcityReconciler, ctx context.Context, nam
 	teamcityStatus := TeamCityStatus{State: state, Message: status}
 	if !reflect.DeepEqual(teamcity.Status, teamcityStatus) {
 		teamcity.Status = teamcityStatus
-		err = r.Status().Update(context.Background(), &teamcity)
+		err = r.Status().Update(ctx, &teamcity)
 		if err != nil {
 			return err
 		}

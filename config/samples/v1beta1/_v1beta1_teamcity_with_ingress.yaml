@@ -1,3 +1,11 @@
+# TeamCity with headless service and Ingress.
+#
+# Combines spec.serviceList (clusterIP: None) with spec.ingressList to expose the
+# server via an Ingress controller (ingressClassName: nginx in this example).
+# Adjust host, ingress class, and TLS to match your cluster.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_ingress.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
@@ -42,7 +50,7 @@ spec:
       spec:
         selector:
           app.kubernetes.io/name: teamcity-sample-with-ingress
-          app.kubernetes.io/component: teamcity-component
+          app.kubernetes.io/component: teamcity-server
           app.kubernetes.io/part-of: teamcity
         ports:
           - protocol: TCP
@@ -60,7 +68,7 @@ spec:
             paths:
               - backend:
                   service:
-                    name: tc-sample
+                    name: tc-sample-for-ingress
                     port:
                       number: 8111
                 pathType: ImplementationSpecific

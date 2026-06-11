@@ -1,3 +1,13 @@
+# Multi-node TeamCity: main + secondary with responsibilities.
+#
+# Shows a shared database-backed setup with explicit node responsibilities,
+# startup properties, and per-node annotations (e.g. cluster-autoscaler safe-to-evict).
+# Custom metadata labels are merged; reserved operator labels cannot be overridden.
+#
+# See: https://www.jetbrains.com/help/teamcity/multinode-setup.html#Responsibilities
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_secondary_node.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
@@ -42,4 +52,4 @@ spec:
         requests:
           cpu: "1000m"
           memory: "2500Mi"
-        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]

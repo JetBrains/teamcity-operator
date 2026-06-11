@@ -1,3 +1,13 @@
+# TeamCity with external MySQL database (bundled demo stack).
+#
+# This manifest is multi-document: it creates a minimal MySQL Deployment/Service,
+# a database-properties Secret, and a TeamCity CR referencing spec.databaseSecret.
+# Secret values are base64-encoded JDBC settings for jdbc:mysql://mysql.default:3306/teamcity.
+#
+# For production, replace the in-cluster MySQL with your own database and Secret.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_database.yaml
 #file: noinspection YAMLSchemaValidation
 apiVersion: v1
 kind: Service

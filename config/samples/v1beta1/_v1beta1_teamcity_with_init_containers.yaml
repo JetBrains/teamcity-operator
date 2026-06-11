@@ -1,3 +1,10 @@
+# TeamCity with custom init containers on the main node.
+#
+# Adds spec.mainNode.spec.initContainers (run before the TeamCity container starts)
+# plus an extra persistentVolumeClaim mounted under /storage/config.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_init_containers.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:

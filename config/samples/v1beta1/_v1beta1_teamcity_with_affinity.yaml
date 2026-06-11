@@ -1,3 +1,10 @@
+# TeamCity with pod affinity on the main node.
+#
+# Sets spec.mainNode.spec.affinity (required nodeAffinity for arm64, preferred for linux).
+# Use this pattern to pin or prefer nodes with specific labels, taints, or topology.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_affinity.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
 metadata:
