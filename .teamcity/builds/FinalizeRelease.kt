@@ -63,6 +63,7 @@ object FinalizeRelease : BuildType({
             name = "Push git tags"
             id = "Push_tags"
             scriptContent = """
+                ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
                 git remote set-url origin git@github.com:JetBrains/teamcity-operator.git
                 git tag %predicted_version%
                 git push --tags
