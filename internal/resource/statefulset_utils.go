@@ -201,18 +201,6 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	}
 }
 
-func ConvertNodeEnvVars(env map[string]string) (envVars []v12.EnvVar) {
-	for k, v := range env {
-		var envVar = v12.EnvVar{
-			Name:      k,
-			Value:     v,
-			ValueFrom: nil,
-		}
-		envVars = append(envVars, envVar)
-	}
-	return envVars
-}
-
 func DatabaseEnvVarBuilder(databaseSecretName string) []v12.EnvVar {
 	return []v12.EnvVar{
 		{
@@ -255,8 +243,7 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	extraServerOpts = responsibilities + extraServerOpts
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
-	nodeSpecificEnvVars := ConvertNodeEnvVars(node.Spec.Env)
-	envVars = append(envVars, nodeSpecificEnvVars...)
+	envVars = append(envVars, node.Spec.Env...)
 	if instance.DatabaseSecretProvided() {
 		databaseEnvVars := DatabaseEnvVarBuilder(instance.Spec.DatabaseSecret.Secret)
 		envVars = append(envVars, databaseEnvVars...)

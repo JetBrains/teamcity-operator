@@ -335,9 +335,33 @@ func getServiceAccount() ServiceAccount {
 	}
 }
 
-func getExtraNodeEnvVars() map[string]string {
-	return map[string]string{
-		"AWS_DEFAULT_REGION": "eu-west-1",
-		"HELLO":              "WORLD",
+func getExtraNodeEnvVars() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{
+			Name:  "AWS_DEFAULT_REGION",
+			Value: "eu-west-1",
+		},
+		{
+			Name:  "HELLO",
+			Value: "WORLD",
+		},
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "aws-creds"},
+					Key:                  "access-key-id",
+				},
+			},
+		},
+		{
+			Name: "FEATURE_FLAGS",
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "tc-config"},
+					Key:                  "feature-flags",
+				},
+			},
+		},
 	}
 }

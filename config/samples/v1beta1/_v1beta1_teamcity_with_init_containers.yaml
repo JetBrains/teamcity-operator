@@ -22,7 +22,8 @@ spec:
           image: busybox:1.28
           command: [ 'sh', '-c', "echo Hello" ]
       env:
-        AWS_DEFAULT_REGION: "eu-west-1"
+        - name: AWS_DEFAULT_REGION
+          value: "eu-west-1"
       requests:
         cpu: "900m"
         memory: "1512Mi"

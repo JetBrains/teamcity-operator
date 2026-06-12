@@ -130,7 +130,13 @@ spec:
     name: main-node
     spec:
       env:
-        AWS_DEFAULT_REGION: "eu-west-1"
+        - name: AWS_DEFAULT_REGION
+          value: "eu-west-1"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
       requests:
         cpu: "900m"
         memory: "1512Mi"
@@ -595,7 +601,6 @@ When defining `spec.serviceList` selectors, use the standard labels the operator
 ## Limitations
 
 - Custom volume mounts are not available; this feature is under development.
-- Mounting custom Secrets as environment variables is currently not supported.
 - Ingress integration has been tested with the NGINX Ingress Controller only.
 
 ## Contributing

@@ -113,7 +113,18 @@ spec:
           command: [ 'sh', '-c', "echo Hello" ]
       responsibilities: [ "MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS" ]
       env:
-        AWS_DEFAULT_REGION: "eu-west-1"
+        - name: AWS_DEFAULT_REGION
+          value: "eu-west-1"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: FEATURE_FLAGS
+          valueFrom:
+            configMapKeyRef:
+              name: teamcity-feature-flags
+              key: flags
       podSecurityContext:
         runAsUser: 1000
         runAsGroup: 1000
