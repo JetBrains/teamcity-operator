@@ -60,6 +60,38 @@ Important notes:
 - TeamCity Server logs are not copied. They are stored separately from the Data Directory.
 
 
+## Breaking changes
+
+### `spec.mainNode.spec.env` / `spec.secondaryNodes[*].spec.env` — type change
+
+The `env` field on `NodeSpec` is now a list of Kubernetes [`EnvVar`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#envvar-v1-core) entries instead of a `map[string]string`. This enables sourcing values from `ConfigMap` and `Secret` objects via `valueFrom`.
+
+Update your existing TeamCity custom resources before applying the new CRD:
+
+```yaml
+# Before
+mainNode:
+  spec:
+    env:
+      AWS_DEFAULT_REGION: "eu-west-1"
+      AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+
+# After
+mainNode:
+  spec:
+    env:
+      - name: AWS_DEFAULT_REGION
+        value: "eu-west-1"
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-credentials
+            key: access-key-id
+```
+
+Apply the updated custom resources together with the new CRD; otherwise the API server will reject the manifests.
+
+
 ## Tips and references
 - Responsibilities and multi-node concepts: https://www.jetbrains.com/help/teamcity/multinode-setup.html
 - TeamCity Data Directory: https://www.jetbrains.com/help/teamcity/teamcity-data-directory.html

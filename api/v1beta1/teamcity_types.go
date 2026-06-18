@@ -59,10 +59,10 @@ type TeamCitySpec struct {
 }
 
 type NodeSpec struct {
-	InitContainers []v1.Container    `json:"initContainers,omitempty"`
-	Requests       v1.ResourceList   `json:"requests"` // mandatory, since we rely on it with Xmx setup
-	Env            map[string]string `json:"env,omitempty"`
-	Limits         v1.ResourceList   `json:"limits,omitempty"`
+	InitContainers []v1.Container  `json:"initContainers,omitempty"`
+	Requests       v1.ResourceList `json:"requests"` // mandatory, since we rely on it with Xmx setup
+	Env            []v1.EnvVar     `json:"env,omitempty"`
+	Limits         v1.ResourceList `json:"limits,omitempty"`
 	// +kubebuilder:default:={runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
 	PodSecurityContext v1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// +kubebuilder:default:={failureThreshold: 3, successThreshold: 1, periodSeconds: 20, initialDelaySeconds: 60, timeoutSeconds: 1}

@@ -18,7 +18,8 @@ spec:
    name: main-node
    spec:
     env:
-      AWS_DEFAULT_REGION: "eu-west-1"
+      - name: AWS_DEFAULT_REGION
+        value: "eu-west-1"
     requests:
       cpu: "1000m"
       memory: "2500Mi"
