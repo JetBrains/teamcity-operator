@@ -668,40 +668,6 @@ CPU utilization alone is often misleading.
 
 Depending on the workload, the bottleneck may be Kotlin DSL compilation, memory, Git operations, build queue size, or another TeamCity-specific characteristic. Measure and identify the bottleneck before changing resources.
 
-### Should Git caches be stored on EFS?
-
-Generally no.
-
-Git caches are I/O intensive, and network file systems tend to introduce performance problems that are hard to diagnose. Prefer faster local storage such as EBS or local NVMe.
-
-### Should Git caches be treated as ephemeral?
-
-It depends on repository size.
-
-Rebuilding caches is usually acceptable for smaller repositories. For very large monorepositories it noticeably affects startup and performance, so preserve cache data when checkout time is significant.
-
-### How does JetBrains preserve Git caches on EBS?
-
-With PersistentVolumeClaims and the AWS EBS CSI driver, instead of treating EBS volumes as disposable.
-
-The driver attaches the correct EBS volume to the Kubernetes node the pod runs on, so cache data survives pod restarts and large caches are not rebuilt unnecessarily.
-
-### Can local NVMe storage be used instead?
-
-Yes.
-
-Some EC2 instance families include local NVMe, which is very fast and has lower latency for cache access. The trade-offs: data is lost when the instance is terminated, there is no snapshot capability, and you may need extra automation. It fits caches you are willing to rebuild.
-
-### How should TeamCity nodes be distributed across Availability Zones?
-
-Across multiple Availability Zones.
-
-Internally we pin specific TeamCity nodes to specific node groups so that persistent EBS volumes stay in the same Availability Zone as the node using them. Automating that placement in the operator is planned but not yet available.
-
-### Should Amazon RDS use Multi-AZ?
-
-Yes for cloud deployments.
-It can add some cross-Availability Zone network traffic, but the higher database availability is worth it.
 
 ## Contributing
 
