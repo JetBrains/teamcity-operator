@@ -8,6 +8,7 @@ TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity ser
 - Sample manifests: `config/samples/v1beta1` (see also `config/samples/teamcity_full.yaml`)
 - Annotations reference: see [Annotations](#annotations) below
 - Development guide: docs/DEVELOPMENT.md
+- Common questions: see [FAQ](#faq) below
 
 ## Installation
 
@@ -602,6 +603,105 @@ When defining `spec.serviceList` selectors, use the standard labels the operator
 
 - Custom volume mounts are not available; this feature is under development.
 - Ingress integration has been tested with the NGINX Ingress Controller only.
+
+## FAQ
+
+### Is the operator recommended for production use?
+
+Yes.
+
+If you run TeamCity on Kubernetes, use the operator instead of writing your own lifecycle automation. It started as the tooling JetBrains needed to run TeamCity Cloud and is actively developed. Some features are still on the roadmap, but it already covers lifecycle management, coordinated upgrades, cluster reconciliation, and stateful workload management — work you would otherwise do yourself with custom scripts, Lambdas, and Terraform. The main difference from a hand-rolled setup is that the operator encodes TeamCity-specific operational knowledge, not just Kubernetes orchestration.
+
+### Does the operator replace Kubernetes orchestration?
+
+No.
+
+Kubernetes still handles scheduling, container restarts, and infrastructure. The operator adds the TeamCity-specific layer on top: lifecycle management, state reconciliation, and upgrade workflows that understand node roles and database upgrade requirements.
+
+### What happens if the main node fails?
+
+Kubernetes restarts it.
+
+The operator keeps the StatefulSet healthy and relies on Kubernetes reconciliation to bring the node back. In the meantime, secondary nodes keep serving the UI and running builds continue, but no new builds start, because build queue management is a main node responsibility. The result is degraded service rather than an outage.
+
+### Should I build my own automatic failover for the main node?
+
+Generally no.
+
+It is technically possible — for example, an AWS Lambda driving the TeamCity API — but the main node has exclusive responsibilities, and transferring them automatically introduces edge cases, particularly around agent assignment. Letting Kubernetes recreate the failed main node is the safer option today. Making nodes more interchangeable is the longer-term direction.
+
+### Is leader election supported?
+
+Not in the operator.
+
+Kubernetes leader election was explored as a proof of concept to reduce failover time, but it was not incorporated because of unresolved edge cases in reassigning the main node role. The operator follows the Kubernetes restart model instead of automatic promotion.
+
+### Should secondary nodes have different responsibilities?
+
+In most deployments, no.
+
+Rather than dedicating one node to VCS and another to change processing, let secondary nodes carry the same responsibilities. Identical nodes give you redundancy, simpler scaling, and no single point of failure per responsibility: if one node becomes unavailable, another continues the work immediately.
+
+### How does JetBrains run its own TeamCity cluster?
+
+The main production deployment has one dedicated main node, several interchangeable worker nodes with the same responsibilities, and additional UI-focused nodes behind a load balancer. Proxy routing (HAProxy, in our case) directs interactive UI traffic to the UI nodes while worker nodes handle build processing, which keeps the UI responsive under heavy load.
+
+### Why does the operator create one StatefulSet per node instead of using replicas?
+
+Each node is managed as its own StatefulSet so it can have node-specific environment variables, configuration, responsibilities, and an independent lifecycle. A single StatefulSet with multiple replicas would make that level of per-node customization much harder.
+
+### Does the operator support HPA or VPA?
+
+Not currently, partly because of the per-node StatefulSet design.
+
+Additional scaling capabilities are on the roadmap.
+
+### How should TeamCity be scaled today?
+
+Vertically first.
+
+Identify the actual bottleneck, increase CPU or memory for the affected node, move to a larger instance type if needed, and only then add TeamCity nodes. This matters most for the main node, which cannot be scaled out by adding replicas.
+
+### Which metrics should be used for scaling?
+
+CPU utilization alone is often misleading.
+
+Depending on the workload, the bottleneck may be Kotlin DSL compilation, memory, Git operations, build queue size, or another TeamCity-specific characteristic. Measure and identify the bottleneck before changing resources.
+
+### Should Git caches be stored on EFS?
+
+Generally no.
+
+Git caches are I/O intensive, and network file systems tend to introduce performance problems that are hard to diagnose. Prefer faster local storage such as EBS or local NVMe.
+
+### Should Git caches be treated as ephemeral?
+
+It depends on repository size.
+
+Rebuilding caches is usually acceptable for smaller repositories. For very large monorepositories it noticeably affects startup and performance, so preserve cache data when checkout time is significant.
+
+### How does JetBrains preserve Git caches on EBS?
+
+With PersistentVolumeClaims and the AWS EBS CSI driver, instead of treating EBS volumes as disposable.
+
+The driver attaches the correct EBS volume to the Kubernetes node the pod runs on, so cache data survives pod restarts and large caches are not rebuilt unnecessarily.
+
+### Can local NVMe storage be used instead?
+
+Yes.
+
+Some EC2 instance families include local NVMe, which is very fast and has lower latency for cache access. The trade-offs: data is lost when the instance is terminated, there is no snapshot capability, and you may need extra automation. It fits caches you are willing to rebuild.
+
+### How should TeamCity nodes be distributed across Availability Zones?
+
+Across multiple Availability Zones.
+
+Internally we pin specific TeamCity nodes to specific node groups so that persistent EBS volumes stay in the same Availability Zone as the node using them. Automating that placement in the operator is planned but not yet available.
+
+### Should Amazon RDS use Multi-AZ?
+
+Yes for cloud deployments.
+It can add some cross-Availability Zone network traffic, but the higher database availability is worth it.
 
 ## Contributing
 
