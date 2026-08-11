@@ -324,6 +324,60 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(volumes)).To(Equal(2))
 		})
 	})
+	Context("TeamCity with node data dir", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+			})
+		})
+		It("mounts per-node claim and sets JVM property", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			Expect(len(statefulSet.Spec.Template.Spec.Volumes)).To(Equal(2))
+			nodeDataVolume := statefulSet.Spec.Template.Spec.Volumes[1]
+			Expect(nodeDataVolume.Name).To(Equal("node-data-dir"))
+			Expect(nodeDataVolume.PersistentVolumeClaim.ClaimName).To(Equal("node-data-dir-" + Instance.Spec.MainNode.Name))
+
+			container := statefulSet.Spec.Template.Spec.Containers[0]
+			Expect(len(container.VolumeMounts)).To(Equal(2))
+			Expect(container.VolumeMounts[1].MountPath).To(Equal("/mnt/node-data-dir"))
+
+			serverOptsEnvVarIndex := slices.IndexFunc(container.Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			Expect(container.Env[serverOptsEnvVarIndex].Value).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
+		})
+		It("uses claim name override when set", func() {
+			Instance.Spec.MainNode.Spec.NodeDataDirClaimName = "existing-main-claim"
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			Expect(statefulSet.Spec.Template.Spec.Volumes[1].PersistentVolumeClaim.ClaimName).To(Equal("existing-main-claim"))
+		})
+	})
+	Context("TeamCity without node data dir remains unchanged", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {})
+		})
+		It("does not set node data path or extra volume", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			Expect(len(statefulSet.Spec.Template.Spec.Volumes)).To(Equal(1))
+			container := statefulSet.Spec.Template.Spec.Containers[0]
+			serverOptsEnvVarIndex := slices.IndexFunc(container.Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			Expect(container.Env[serverOptsEnvVarIndex].Value).NotTo(ContainSubstring("teamcity.node.data.path"))
+		})
+	})
 	Context("TeamCity with node selector", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
