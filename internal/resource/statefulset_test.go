@@ -293,7 +293,7 @@ var _ = Describe("StatefulSet", func() {
 			serverOpts := containerEnv[serverOptsEnvVarIndex].Value
 			serverOptsSplit := strings.Fields(serverOpts)
 			startupConfig := getStartupConfigurations()
-			startUpServerOpts := serverOptsSplit[len(serverOptsSplit)-len(startupConfig):] //get elements of the split that correspond to startup vars
+			startUpServerOpts := serverOptsSplit[len(serverOptsSplit)-len(startupConfig):]
 
 			keys := SortKeysAlphabeticallyInMap(startupConfig)
 			i := 0
@@ -304,6 +304,24 @@ var _ = Describe("StatefulSet", func() {
 				i += 1
 			}
 
+		})
+		It("ignores teamcity.node.data.path from startup properties when node data dir is set", func() {
+			Instance.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+			Instance.Spec.StartupPropertiesConfig = map[string]string{
+				"teamcity.node.data.path":             "/wrong",
+				"teamcity.startup.maintenance":        "false",
+			}
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			containerEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			serverOptsEnvVarIndex := slices.IndexFunc(containerEnv, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			serverOpts := containerEnv[serverOptsEnvVarIndex].Value
+			Expect(serverOpts).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
+			Expect(serverOpts).NotTo(ContainSubstring("/wrong"))
 		})
 	})
 	Context("TeamCity with additional mounts", func() {

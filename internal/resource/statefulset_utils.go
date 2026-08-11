@@ -84,6 +84,7 @@ func ServerOptsEnvVar(dataDirPath string, nodeName string, extraServerOpts strin
 }
 
 const NodeDataDirServerOptPrefix = " -Dteamcity.node.data.path="
+const TeamCityNodeDataPathProperty = "teamcity.node.data.path"
 
 func NodeDataDirServerOpt(nodeDataDirPath string) string {
 	if nodeDataDirPath == "" {
@@ -114,6 +115,9 @@ func LifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
 func ConvertStartUpPropertiesToServerOptions(startupProperties map[string]string) (res string) {
 	sortedKeys := SortKeysAlphabeticallyInMap(startupProperties)
 	for _, k := range sortedKeys {
+		if k == TeamCityNodeDataPathProperty {
+			continue
+		}
 		res += fmt.Sprintf(" -D%s=%s", k, startupProperties[k])
 	}
 	return
