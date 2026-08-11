@@ -1,0 +1,56 @@
+# Multi-node TeamCity with per-node data directory (TCC-727).
+#
+# Creates a RWO PVC per node ({name}-{nodeName}), mounts it at the configured
+# path, and sets -Dteamcity.node.data.path. Omit nodeDataDirClaimName for
+# greenfield; set it to adopt an existing claim without recreating the volume.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir.yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-node-data-dir
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /data/teamcity_server
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  nodeDataDirVolumeClaim:
+    name: node-data-dir
+    volumeMount:
+      name: node-data-dir
+      mountPath: /mnt/node-data-dir
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: ["MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]
