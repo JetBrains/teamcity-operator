@@ -4,6 +4,7 @@
     <working_directory value="$PROJECT_DIR$" />
     <parameters value="--zap-log-level=debug" />
     <envs>
+      <env name="CGO_ENABLED" value="0" />
       <env name="CERT_DIR_PATH" value="./certs" />
       <env name="ENABLE_WEBHOOKS" value="true" />
     </envs>

@@ -191,8 +191,8 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
 	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
 	volumeMounts := BuildVolumeMountsFromPersistentVolumeClaims(allPersistentVolumeClaims)
-	if instance.NodeDataDirEnabled() {
-		volumeMounts = append(volumeMounts, createNodeDataDirVolumeMount(instance))
+	if instance.NodeDataDirEnabledFor(node) {
+		volumeMounts = append(volumeMounts, createNodeDataDirVolumeMount(node))
 	}
 	container.VolumeMounts = volumeMounts
 	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
@@ -203,8 +203,8 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet) {
 	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
 	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
-	if instance.NodeDataDirEnabled() {
-		volumes = append(volumes, createNodeDataDirVolume(instance, node))
+	if instance.NodeDataDirEnabledFor(node) {
+		volumes = append(volumes, createNodeDataDirVolume(node))
 	}
 	current.Spec.Replicas = pointer.Int32(1)
 	current.Spec.Template.Annotations = node.Annotations
@@ -220,27 +220,27 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	}
 }
 
-func createNodeDataDirVolumeMount(instance *TeamCity) v12.VolumeMount {
+func createNodeDataDirVolumeMount(node Node) v12.VolumeMount {
 	return v12.VolumeMount{
-		Name:      instance.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
-		MountPath: instance.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath,
+		Name:      node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
+		MountPath: node.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath,
 	}
 }
 
-func createNodeDataDirVolume(instance *TeamCity, node Node) v12.Volume {
+func createNodeDataDirVolume(node Node) v12.Volume {
 	return v12.Volume{
-		Name: instance.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
+		Name: node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
 		VolumeSource: v12.VolumeSource{
 			PersistentVolumeClaim: &v12.PersistentVolumeClaimVolumeSource{
-				ClaimName: instance.NodeDataDirClaimNameFor(node),
+				ClaimName: node.Spec.NodeDataDirVolumeClaim.Name,
 			},
 		},
 	}
 }
 
-func createNodeDataDirEmptyDirVolume(instance *TeamCity) v12.Volume {
+func createNodeDataDirEmptyDirVolume(node Node) v12.Volume {
 	return v12.Volume{
-		Name: instance.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
+		Name: node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
 		VolumeSource: v12.VolumeSource{
 			EmptyDir: &v12.EmptyDirVolumeSource{},
 		},
@@ -286,7 +286,7 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	if len(node.Spec.Responsibilities) > 0 {
 		responsibilities = ConvertResponsibilitiesToServerOptions(node.Spec.Responsibilities)
 	}
-	extraServerOpts = responsibilities + NodeDataDirServerOpt(instance.NodeDataDirPath()) + extraServerOpts
+	extraServerOpts = responsibilities + NodeDataDirServerOpt(instance.NodeDataDirPathFor(node)) + extraServerOpts
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
 	envVars = append(envVars, node.Spec.Env...)

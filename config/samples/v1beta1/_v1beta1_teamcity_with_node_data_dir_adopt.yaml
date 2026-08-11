@@ -1,20 +1,13 @@
-# Single-node TeamCity adopting an existing node-data PVC (TCC-727).
+# Adopt existing Nightly/Helm per-node data directory PVCs (TCC-727).
 #
-# Create the claim before applying this CR, then set nodeDataDirClaimName to
-# that claim name. The operator mounts it and does not create a derived PVC.
+# Nightly (release tc-project) example names:
+#   main:      tc-project-teamcity-main-node-data-dir
+#   secondary: node-data-dir-tc-project-teamcity-secondary-0
 #
-#   kubectl apply -f - <<EOF
-#   apiVersion: v1
-#   kind: PersistentVolumeClaim
-#   metadata:
-#     name: existing-node-data-dir
-#     namespace: default
-#   spec:
-#     accessModes: [ReadWriteOnce]
-#     resources:
-#       requests:
-#         storage: 1Gi
-#   EOF
+# existingClaim: true mounts the named PVC without creating or owning it.
+# Spec is optional in this mode. JVM -Dteamcity.node.data.path is still set.
+#
+# Apply:
 #   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir_adopt.yaml
 apiVersion: jetbrains.com/v1beta1
 kind: TeamCity
@@ -39,21 +32,15 @@ spec:
       resources:
         requests:
           storage: 1Gi
-  nodeDataDirVolumeClaim:
-    name: node-data-dir
-    volumeMount:
-      name: node-data-dir
-      mountPath: /mnt/node-data-dir
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
   mainNode:
     name: main-node
     spec:
-      nodeDataDirClaimName: existing-node-data-dir
       requests:
-        cpu: "400m"
-        memory: "1000Mi"
+        cpu: "1000m"
+        memory: "2500Mi"
+      nodeDataDirVolumeClaim:
+        name: existing-node-data-dir
+        existingClaim: true
+        volumeMount:
+          name: node-data-dir
+          mountPath: /mnt/node-data-dir

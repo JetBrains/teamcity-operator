@@ -169,26 +169,29 @@ func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err er
 }
 
 func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
-	hasClaimNameOverride := false
-	for _, node := range teamcity.GetAllNodes() {
-		if node.Spec.NodeDataDirClaimName != "" {
-			hasClaimNameOverride = true
-			break
-		}
+	type nodeClaim struct {
+		node       Node
+		objectPath string
+		claim      *CustomPersistentVolumeClaim
 	}
 
-	if !teamcity.NodeDataDirEnabled() {
-		if hasClaimNameOverride {
-			return typed.ValidationError{
-				Path:         "teamcity.spec.nodeDataDirVolumeClaim",
-				ErrorMessage: "nodeDataDirVolumeClaim must be set when nodeDataDirClaimName is specified on a node",
-			}
+	var configured []nodeClaim
+	for idx, node := range append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...) {
+		objectPath := "teamcity.spec.mainNode"
+		if idx > 0 {
+			objectPath = fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx-1)
 		}
+		if node.Spec.NodeDataDirVolumeClaim == nil {
+			continue
+		}
+		configured = append(configured, nodeClaim{
+			node:       node,
+			objectPath: objectPath,
+			claim:      node.Spec.NodeDataDirVolumeClaim,
+		})
+	}
+	if len(configured) == 0 {
 		return nil
-	}
-
-	if err := validateCustomPersistentVolumeClaim("teamcity.spec.nodeDataDirVolumeClaim", *teamcity.Spec.NodeDataDirVolumeClaim); err != nil {
-		return err
 	}
 
 	if _, exists := teamcity.Spec.StartupPropertiesConfig[resourceTeamCityNodeDataPathProperty]; exists {
@@ -198,20 +201,6 @@ func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
 		}
 	}
 
-	for idx, node := range append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...) {
-		objectPath := "teamcity.spec.mainNode"
-		if idx > 0 {
-			objectPath = fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx-1)
-		}
-		if err := validateNodeDataDirClaimName(objectPath, node); err != nil {
-			return err
-		}
-	}
-
-	if err := validateNodeDataDirMountUniqueness(teamcity); err != nil {
-		return err
-	}
-
 	reservedClaimNames := map[string]string{
 		teamcity.Spec.DataDirVolumeClaim.Name: "teamcity.spec.dataDirVolumeClaim.name",
 	}
@@ -219,113 +208,108 @@ func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
 		reservedClaimNames[additional.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].name", idx)
 	}
 
-	if path, exists := reservedClaimNames[teamcity.Spec.NodeDataDirVolumeClaim.Name]; exists {
+	reservedVolumeNames := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.Name: "teamcity.spec.dataDirVolumeClaim.volumeMount.name",
+	}
+	reservedMountPaths := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.MountPath: "teamcity.spec.dataDirVolumeClaim.volumeMount.mountPath",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		reservedVolumeNames[additional.VolumeMount.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.name", idx)
+		reservedMountPaths[additional.VolumeMount.MountPath] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.mountPath", idx)
+	}
+
+	claimNamesSeen := map[string]string{}
+	sharedVolumeName := configured[0].claim.VolumeMount.Name
+	sharedMountPath := configured[0].claim.VolumeMount.MountPath
+
+	for _, item := range configured {
+		claimPath := fmt.Sprintf("%s.spec.nodeDataDirVolumeClaim", item.objectPath)
+		if item.claim.ExistingClaim {
+			if err := validateNodeDataDirExistingClaim(claimPath, *item.claim); err != nil {
+				return err
+			}
+		} else {
+			if err := validateCustomPersistentVolumeClaim(claimPath, *item.claim); err != nil {
+				return err
+			}
+		}
+
+		effectiveName := item.claim.Name
+		if len(effectiveName) > maxKubernetesDNSSubdomainLength {
+			return typed.ValidationError{
+				Path:         claimPath + ".name",
+				ErrorMessage: fmt.Sprintf("claim name %q exceeds %d characters", effectiveName, maxKubernetesDNSSubdomainLength),
+			}
+		}
+		if path, exists := reservedClaimNames[effectiveName]; exists {
+			return typed.ValidationError{
+				Path:         claimPath + ".name",
+				ErrorMessage: fmt.Sprintf("collides with %s", path),
+			}
+		}
+		if previous, exists := claimNamesSeen[effectiveName]; exists {
+			return typed.ValidationError{
+				Path:         claimPath + ".name",
+				ErrorMessage: fmt.Sprintf("nodes %q and %q resolve to the same node data PVC %q", previous, item.node.Name, effectiveName),
+			}
+		}
+		claimNamesSeen[effectiveName] = item.node.Name
+
+		if item.claim.VolumeMount.Name != sharedVolumeName {
+			return typed.ValidationError{
+				Path:         claimPath + ".volumeMount.name",
+				ErrorMessage: fmt.Sprintf("must match other nodes (%q)", sharedVolumeName),
+			}
+		}
+		if item.claim.VolumeMount.MountPath != sharedMountPath {
+			return typed.ValidationError{
+				Path:         claimPath + ".volumeMount.mountPath",
+				ErrorMessage: fmt.Sprintf("must match other nodes (%q)", sharedMountPath),
+			}
+		}
+	}
+
+	if path, exists := reservedVolumeNames[sharedVolumeName]; exists {
 		return typed.ValidationError{
-			Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
+			Path:         configured[0].objectPath + ".spec.nodeDataDirVolumeClaim.volumeMount.name",
+			ErrorMessage: fmt.Sprintf("collides with %s", path),
+		}
+	}
+	if path, exists := reservedMountPaths[sharedMountPath]; exists {
+		return typed.ValidationError{
+			Path:         configured[0].objectPath + ".spec.nodeDataDirVolumeClaim.volumeMount.mountPath",
 			ErrorMessage: fmt.Sprintf("collides with %s", path),
 		}
 	}
 
-	claimNamesSeen := map[string]string{}
-	for _, node := range teamcity.GetAllNodes() {
-		derivedName := teamcity.NodeDataDirPVCName(node.Name)
-		if len(derivedName) > maxKubernetesDNSSubdomainLength {
-			return typed.ValidationError{
-				Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
-				ErrorMessage: fmt.Sprintf("derived PVC name %q exceeds %d characters", derivedName, maxKubernetesDNSSubdomainLength),
-			}
-		}
-		if path, exists := reservedClaimNames[derivedName]; exists {
-			return typed.ValidationError{
-				Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
-				ErrorMessage: fmt.Sprintf("derived PVC name %q collides with %s", derivedName, path),
-			}
-		}
+	return nil
+}
 
-		effectiveClaim := teamcity.NodeDataDirClaimNameFor(node)
-		if len(effectiveClaim) > maxKubernetesDNSSubdomainLength {
-			return typed.ValidationError{
-				Path:         fmt.Sprintf("teamcity node %q nodeDataDirClaimName", node.Name),
-				ErrorMessage: fmt.Sprintf("claim name %q exceeds %d characters", effectiveClaim, maxKubernetesDNSSubdomainLength),
-			}
-		}
-		if previous, exists := claimNamesSeen[effectiveClaim]; exists {
-			return typed.ValidationError{
-				Path:         "teamcity.spec.nodeDataDirClaimName",
-				ErrorMessage: fmt.Sprintf("nodes %q and %q resolve to the same node data PVC %q", previous, node.Name, effectiveClaim),
-			}
-		}
-		claimNamesSeen[effectiveClaim] = node.Name
-
-		if path, exists := reservedClaimNames[effectiveClaim]; exists {
-			return typed.ValidationError{
-				Path:         "teamcity.spec.nodeDataDirClaimName",
-				ErrorMessage: fmt.Sprintf("node data PVC %q collides with %s", effectiveClaim, path),
-			}
+func validateNodeDataDirExistingClaim(objectPath string, claim CustomPersistentVolumeClaim) error {
+	if len(claim.Name) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "name"),
+			ErrorMessage: "Claim name is not set",
 		}
 	}
-
+	if len(claim.VolumeMount.Name) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "volumeMount.name"),
+			ErrorMessage: "Volume mount name is not set",
+		}
+	}
+	if len(claim.VolumeMount.MountPath) <= 0 {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.%s", objectPath, "volumeMount.mountPath"),
+			ErrorMessage: "Volume mount path is not set",
+		}
+	}
 	return nil
 }
 
 const maxKubernetesDNSSubdomainLength = 253
 const resourceTeamCityNodeDataPathProperty = "teamcity.node.data.path"
-
-func validateNodeDataDirMountUniqueness(teamcity *TeamCity) error {
-	volumeNames := map[string]string{
-		teamcity.Spec.DataDirVolumeClaim.VolumeMount.Name: "teamcity.spec.dataDirVolumeClaim.volumeMount.name",
-	}
-	mountPaths := map[string]string{
-		teamcity.Spec.DataDirVolumeClaim.VolumeMount.MountPath: "teamcity.spec.dataDirVolumeClaim.volumeMount.mountPath",
-	}
-	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
-		namePath := fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.name", idx)
-		mountPathPath := fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.mountPath", idx)
-		if existing, exists := volumeNames[additional.VolumeMount.Name]; exists {
-			return typed.ValidationError{
-				Path:         namePath,
-				ErrorMessage: fmt.Sprintf("collides with %s", existing),
-			}
-		}
-		if existing, exists := mountPaths[additional.VolumeMount.MountPath]; exists {
-			return typed.ValidationError{
-				Path:         mountPathPath,
-				ErrorMessage: fmt.Sprintf("collides with %s", existing),
-			}
-		}
-		volumeNames[additional.VolumeMount.Name] = namePath
-		mountPaths[additional.VolumeMount.MountPath] = mountPathPath
-	}
-
-	nodeVolumeName := teamcity.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
-	nodeMountPath := teamcity.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath
-	if existing, exists := volumeNames[nodeVolumeName]; exists {
-		return typed.ValidationError{
-			Path:         "teamcity.spec.nodeDataDirVolumeClaim.volumeMount.name",
-			ErrorMessage: fmt.Sprintf("collides with %s", existing),
-		}
-	}
-	if existing, exists := mountPaths[nodeMountPath]; exists {
-		return typed.ValidationError{
-			Path:         "teamcity.spec.nodeDataDirVolumeClaim.volumeMount.mountPath",
-			ErrorMessage: fmt.Sprintf("collides with %s", existing),
-		}
-	}
-	return nil
-}
-
-func validateNodeDataDirClaimName(objectPath string, node Node) error {
-	if node.Spec.NodeDataDirClaimName == "" {
-		return nil
-	}
-	if strings.TrimSpace(node.Spec.NodeDataDirClaimName) == "" {
-		return typed.ValidationError{
-			Path:         fmt.Sprintf("%s.spec.nodeDataDirClaimName", objectPath),
-			ErrorMessage: "nodeDataDirClaimName cannot be blank",
-		}
-	}
-	return nil
-}
 
 func validateCustomPersistentVolumeClaim(objectPath string, claim CustomPersistentVolumeClaim) error {
 	if len(claim.Name) <= 0 {

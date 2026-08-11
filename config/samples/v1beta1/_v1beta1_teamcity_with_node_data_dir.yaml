@@ -1,8 +1,8 @@
 # Multi-node TeamCity with per-node data directory (TCC-727).
 #
-# Creates a RWO PVC per node ({name}-{nodeName}), mounts it at the configured
-# path, and sets -Dteamcity.node.data.path. Omit nodeDataDirClaimName for
-# greenfield; set it to adopt an existing claim without recreating the volume.
+# Each node sets its own nodeDataDirVolumeClaim.name (exact PVC name).
+# The operator creates/manages that claim, mounts it, and sets
+# -Dteamcity.node.data.path. Mount name/path must match across nodes.
 #
 # Apply:
 #   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir.yaml
@@ -29,17 +29,6 @@ spec:
       resources:
         requests:
           storage: 1Gi
-  nodeDataDirVolumeClaim:
-    name: node-data-dir
-    volumeMount:
-      name: node-data-dir
-      mountPath: /mnt/node-data-dir
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
   mainNode:
     name: main-node
     spec:
@@ -47,6 +36,17 @@ spec:
         cpu: "1000m"
         memory: "2500Mi"
       responsibilities: ["MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+      nodeDataDirVolumeClaim:
+        name: node-data-dir-main-node
+        volumeMount:
+          name: node-data-dir
+          mountPath: /mnt/node-data-dir
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
   secondaryNodes:
     - name: secondary-node
       spec:
@@ -54,3 +54,14 @@ spec:
           cpu: "1000m"
           memory: "2500Mi"
         responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]
+        nodeDataDirVolumeClaim:
+          name: node-data-dir-secondary-node
+          volumeMount:
+            name: node-data-dir
+            mountPath: /mnt/node-data-dir
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
