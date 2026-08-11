@@ -73,6 +73,56 @@ func TestValidateNodeDataDirDerivedNameCollision(t *testing.T) {
 	assert.Contains(t, err.Error(), "derived PVC name")
 }
 
+func TestValidateNodeDataDirDuplicateClaimNames(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.MainNode.Spec.NodeDataDirClaimName = "shared-claim"
+	tc.Spec.SecondaryNodes = []Node{
+		{
+			Name: "secondary",
+			Spec: NodeSpec{
+				Requests: corev1.ResourceList{
+					"cpu":    resource.MustParse("500m"),
+					"memory": resource.MustParse("1Gi"),
+				},
+				NodeDataDirClaimName: "shared-claim",
+			},
+		},
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "same node data PVC")
+}
+
+func TestValidateNodeDataDirMountPathCollision(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath = tc.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "volumeMount.mountPath")
+}
+
+func TestValidateNodeDataDirVolumeNameCollision(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.NodeDataDirVolumeClaim.VolumeMount.Name = tc.Spec.DataDirVolumeClaim.VolumeMount.Name
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "volumeMount.name")
+}
+
+func TestValidateNodeDataDirStartupPropertyRejected(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.StartupPropertiesConfig = map[string]string{
+		"teamcity.node.data.path": "/wrong",
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "startupPropertiesConfig")
+}
+
 func validNodeDataDirTemplate() *CustomPersistentVolumeClaim {
 	return &CustomPersistentVolumeClaim{
 		Name: "node-data-dir",

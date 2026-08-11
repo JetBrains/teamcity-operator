@@ -169,9 +169,9 @@ func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err er
 }
 
 func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
-	hasClaimNameOverride := teamcity.Spec.MainNode.Spec.NodeDataDirClaimName != ""
-	for _, secondary := range teamcity.Spec.SecondaryNodes {
-		if secondary.Spec.NodeDataDirClaimName != "" {
+	hasClaimNameOverride := false
+	for _, node := range teamcity.GetAllNodes() {
+		if node.Spec.NodeDataDirClaimName != "" {
 			hasClaimNameOverride = true
 			break
 		}
@@ -191,39 +191,126 @@ func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
 		return err
 	}
 
-	if err := validateNodeDataDirClaimName("teamcity.spec.mainNode", teamcity.Spec.MainNode); err != nil {
-		return err
+	if _, exists := teamcity.Spec.StartupPropertiesConfig[resourceTeamCityNodeDataPathProperty]; exists {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.startupPropertiesConfig",
+			ErrorMessage: "teamcity.node.data.path is set by nodeDataDirVolumeClaim; remove it from startupPropertiesConfig",
+		}
 	}
-	for idx, secondary := range teamcity.Spec.SecondaryNodes {
-		if err := validateNodeDataDirClaimName(fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx), secondary); err != nil {
+
+	for idx, node := range append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...) {
+		objectPath := "teamcity.spec.mainNode"
+		if idx > 0 {
+			objectPath = fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx-1)
+		}
+		if err := validateNodeDataDirClaimName(objectPath, node); err != nil {
 			return err
 		}
 	}
 
-	reservedNames := map[string]string{
+	if err := validateNodeDataDirMountUniqueness(teamcity); err != nil {
+		return err
+	}
+
+	reservedClaimNames := map[string]string{
 		teamcity.Spec.DataDirVolumeClaim.Name: "teamcity.spec.dataDirVolumeClaim.name",
 	}
 	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
-		reservedNames[additional.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].name", idx)
+		reservedClaimNames[additional.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].name", idx)
 	}
 
-	if path, exists := reservedNames[teamcity.Spec.NodeDataDirVolumeClaim.Name]; exists {
+	if path, exists := reservedClaimNames[teamcity.Spec.NodeDataDirVolumeClaim.Name]; exists {
 		return typed.ValidationError{
 			Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
 			ErrorMessage: fmt.Sprintf("collides with %s", path),
 		}
 	}
 
+	claimNamesSeen := map[string]string{}
 	for _, node := range teamcity.GetAllNodes() {
 		derivedName := teamcity.NodeDataDirPVCName(node.Name)
-		if path, exists := reservedNames[derivedName]; exists {
+		if len(derivedName) > maxKubernetesDNSSubdomainLength {
+			return typed.ValidationError{
+				Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
+				ErrorMessage: fmt.Sprintf("derived PVC name %q exceeds %d characters", derivedName, maxKubernetesDNSSubdomainLength),
+			}
+		}
+		if path, exists := reservedClaimNames[derivedName]; exists {
 			return typed.ValidationError{
 				Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
 				ErrorMessage: fmt.Sprintf("derived PVC name %q collides with %s", derivedName, path),
 			}
 		}
+
+		effectiveClaim := teamcity.NodeDataDirClaimNameFor(node)
+		if len(effectiveClaim) > maxKubernetesDNSSubdomainLength {
+			return typed.ValidationError{
+				Path:         fmt.Sprintf("teamcity node %q nodeDataDirClaimName", node.Name),
+				ErrorMessage: fmt.Sprintf("claim name %q exceeds %d characters", effectiveClaim, maxKubernetesDNSSubdomainLength),
+			}
+		}
+		if previous, exists := claimNamesSeen[effectiveClaim]; exists {
+			return typed.ValidationError{
+				Path:         "teamcity.spec.nodeDataDirClaimName",
+				ErrorMessage: fmt.Sprintf("nodes %q and %q resolve to the same node data PVC %q", previous, node.Name, effectiveClaim),
+			}
+		}
+		claimNamesSeen[effectiveClaim] = node.Name
+
+		if path, exists := reservedClaimNames[effectiveClaim]; exists {
+			return typed.ValidationError{
+				Path:         "teamcity.spec.nodeDataDirClaimName",
+				ErrorMessage: fmt.Sprintf("node data PVC %q collides with %s", effectiveClaim, path),
+			}
+		}
 	}
 
+	return nil
+}
+
+const maxKubernetesDNSSubdomainLength = 253
+const resourceTeamCityNodeDataPathProperty = "teamcity.node.data.path"
+
+func validateNodeDataDirMountUniqueness(teamcity *TeamCity) error {
+	volumeNames := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.Name: "teamcity.spec.dataDirVolumeClaim.volumeMount.name",
+	}
+	mountPaths := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.MountPath: "teamcity.spec.dataDirVolumeClaim.volumeMount.mountPath",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		namePath := fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.name", idx)
+		mountPathPath := fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.mountPath", idx)
+		if existing, exists := volumeNames[additional.VolumeMount.Name]; exists {
+			return typed.ValidationError{
+				Path:         namePath,
+				ErrorMessage: fmt.Sprintf("collides with %s", existing),
+			}
+		}
+		if existing, exists := mountPaths[additional.VolumeMount.MountPath]; exists {
+			return typed.ValidationError{
+				Path:         mountPathPath,
+				ErrorMessage: fmt.Sprintf("collides with %s", existing),
+			}
+		}
+		volumeNames[additional.VolumeMount.Name] = namePath
+		mountPaths[additional.VolumeMount.MountPath] = mountPathPath
+	}
+
+	nodeVolumeName := teamcity.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
+	nodeMountPath := teamcity.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath
+	if existing, exists := volumeNames[nodeVolumeName]; exists {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.nodeDataDirVolumeClaim.volumeMount.name",
+			ErrorMessage: fmt.Sprintf("collides with %s", existing),
+		}
+	}
+	if existing, exists := mountPaths[nodeMountPath]; exists {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.nodeDataDirVolumeClaim.volumeMount.mountPath",
+			ErrorMessage: fmt.Sprintf("collides with %s", existing),
+		}
+	}
 	return nil
 }
 
