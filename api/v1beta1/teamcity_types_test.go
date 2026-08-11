@@ -175,6 +175,39 @@ func TestGetAllCustomPersistentVolumeClaim(t *testing.T) {
 	assert.Equal(t, "data-dir", result[2].Name)
 }
 
+func TestNodeDataDirHelpers(t *testing.T) {
+	template := &CustomPersistentVolumeClaim{
+		Name: "node-data-dir",
+		VolumeMount: corev1.VolumeMount{
+			Name:      "node-data-dir",
+			MountPath: "/mnt/node-data-dir",
+		},
+	}
+	instance := TeamCity{
+		Spec: TeamCitySpec{
+			NodeDataDirVolumeClaim: template,
+			MainNode: Node{
+				Name: "main-node",
+			},
+			SecondaryNodes: []Node{
+				{Name: "secondary-node", Spec: NodeSpec{NodeDataDirClaimName: "existing-secondary-claim"}},
+			},
+		},
+	}
+
+	assert.True(t, instance.NodeDataDirEnabled())
+	assert.Equal(t, "/mnt/node-data-dir", instance.NodeDataDirPath())
+	assert.Equal(t, "node-data-dir-main-node", instance.NodeDataDirPVCName("main-node"))
+	assert.Equal(t, "node-data-dir-main-node", instance.NodeDataDirClaimNameFor(instance.Spec.MainNode))
+	assert.Equal(t, "existing-secondary-claim", instance.NodeDataDirClaimNameFor(instance.Spec.SecondaryNodes[0]))
+
+	disabled := TeamCity{}
+	assert.False(t, disabled.NodeDataDirEnabled())
+	assert.Equal(t, "", disabled.NodeDataDirPath())
+	assert.Equal(t, "", disabled.NodeDataDirPVCName("main-node"))
+	assert.Equal(t, "", disabled.NodeDataDirClaimNameFor(Node{Name: "main-node"}))
+}
+
 func TestServiceAccountProvided(t *testing.T) {
 	tests := []struct {
 		name           string

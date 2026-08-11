@@ -293,6 +293,11 @@ func (in *TeamCitySpec) DeepCopyInto(out *TeamCitySpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.NodeDataDirVolumeClaim != nil {
+		in, out := &in.NodeDataDirVolumeClaim, &out.NodeDataDirVolumeClaim
+		*out = new(CustomPersistentVolumeClaim)
+		(*in).DeepCopyInto(*out)
+	}
 	out.TeamCityServerPort = in.TeamCityServerPort
 	in.ReadinessEndpoint.DeepCopyInto(&out.ReadinessEndpoint)
 	in.HealthEndpoint.DeepCopyInto(&out.HealthEndpoint)
