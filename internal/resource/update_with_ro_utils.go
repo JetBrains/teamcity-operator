@@ -55,14 +55,33 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	roStatefulSet.Spec.Selector = &metav1.LabelSelector{
 		MatchLabels: labels,
 	}
-	roStatefulSet.Spec.Template.Spec = mainStatefulSet.Spec.Template.Spec
+	roStatefulSet.Spec.Template.Spec = *mainStatefulSet.Spec.Template.Spec.DeepCopy()
 	roStatefulSet.Spec.Template.Labels = labels
+	if instance.NodeDataDirEnabled() {
+		replaceNodeDataDirWithEmptyDir(&roStatefulSet.Spec.Template.Spec, instance)
+	}
 	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
 	roStatefulSet.Spec.Template.Spec.Containers[0].Env = envVars
 	if err := controllerutil.SetControllerReference(instance, roStatefulSet, scheme); err != nil {
 		return fmt.Errorf("failed setting controller reference: %w", err)
 	}
 	return nil
+}
+
+func replaceNodeDataDirWithEmptyDir(podSpec *v12.PodSpec, instance *TeamCity) {
+	volumeName := instance.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
+	emptyDirVolume := createNodeDataDirEmptyDirVolume(instance)
+	replaced := false
+	for i := range podSpec.Volumes {
+		if podSpec.Volumes[i].Name == volumeName {
+			podSpec.Volumes[i] = emptyDirVolume
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		podSpec.Volumes = append(podSpec.Volumes, emptyDirVolume)
+	}
 }
 
 func ChangesRequireNodeStatefulSetRestart(instance *TeamCity, node Node, existing *v1.StatefulSet) bool {
