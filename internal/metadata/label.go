@@ -47,6 +47,17 @@ func getNodeResponsibilityLabel(nodeRole string) Labels {
 	}
 }
 
+const NodeDataDirLabelKey = "teamcity.jetbrains.com/node-data-dir"
+const NodeDataDirLabelValue = "true"
+
+func IsNodeDataDirPVC(labels map[string]string) bool {
+	return labels[NodeDataDirLabelKey] == NodeDataDirLabelValue
+}
+
+func WithNodeDataDirLabel(labels Labels) Labels {
+	return mergeLabels(labels, Labels{NodeDataDirLabelKey: NodeDataDirLabelValue})
+}
+
 func getNodeLabels(nodeName string, nodeRole string) Labels {
 	return Labels{
 		"teamcity.jetbrains.com/node-name": nodeName,
