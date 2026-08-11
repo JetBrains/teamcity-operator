@@ -67,8 +67,8 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_service.yaml` | Headless Service + `serviceName` (new deployment) |
 | `_v1beta1_teamcity_with_service_name_recreate.yaml` | `serviceName` change on existing deployment |
 | `_v1beta1_teamcity_with_secondary_node.yaml` | Multi-node with responsibilities |
-| `_v1beta1_teamcity_with_node_data_dir.yaml` | Per-node data directory (`nodeDataDirVolumeClaim`) |
-| `_v1beta1_teamcity_with_node_data_dir_adopt.yaml` | Adopt an existing node-data PVC via `nodeDataDirClaimName` |
+| `_v1beta1_teamcity_with_node_data_dir.yaml` | Per-node data directory (`*.spec.nodeDataDirVolumeClaim`) |
+| `_v1beta1_teamcity_with_node_data_dir_adopt.yaml` | Adopt existing PVC via `existingClaim: true` |
 | `_v1beta1_teamcity_with_secondary_node_read_only.yaml` | Secondary node without responsibilities |
 | `_v1beta1_teamcity_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (single node) |
 | `_v1beta1_teamcity_with_secondary_node_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (multi-node) |
@@ -433,36 +433,45 @@ spec:
 
 ### Per-node data directory
 
-TeamCity can keep node-specific caches on a separate volume via `-Dteamcity.node.data.path`. Set optional `spec.nodeDataDirVolumeClaim` (same shape as `dataDirVolumeClaim`). The operator:
+TeamCity can keep node-specific caches on a separate volume via `-Dteamcity.node.data.path`. Set optional `spec.mainNode.spec.nodeDataDirVolumeClaim` / `spec.secondaryNodes[].spec.nodeDataDirVolumeClaim`. Whenever `nodeDataDirVolumeClaim` is present, the operator mounts it and sets `-Dteamcity.node.data.path=<mountPath>`.
 
-- Creates one RWO PVC per node named `{claim.name}-{node.name}` (greenfield)
-- Mounts it only on that node's StatefulSet at `volumeMount.mountPath`
-- Appends `-Dteamcity.node.data.path=<mountPath>` to `TEAMCITY_SERVER_OPTS`
+Volume mount name and path must be the same on every node that enables the feature.
 
-To adopt an existing PVC (for example when migrating from the Helm chart), set `spec.mainNode.spec.nodeDataDirClaimName` / `spec.secondaryNodes[].spec.nodeDataDirClaimName` to the live claim name. The operator mounts that claim and does **not** create a new PVC for that node.
+**Greenfield** — omit `existingClaim`; provide `spec` so the operator creates/manages the PVC:
 
 ```yaml
-  nodeDataDirVolumeClaim:
-    name: node-data-dir
-    volumeMount:
-      name: node-data-dir
-      mountPath: /mnt/node-data-dir
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-  mainNode:
-    name: main-node
-    spec:
-      # nodeDataDirClaimName: existing-main-node-data-dir  # adopt instead of creating node-data-dir-main-node
-      requests:
-        cpu: "1000m"
-        memory: "2500Mi"
+      nodeDataDirVolumeClaim:
+        name: node-data-dir-main-node
+        volumeMount:
+          name: node-data-dir
+          mountPath: /mnt/node-data-dir
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 2000Gi
 ```
 
-Upgrading the operator alone does nothing until a TeamCity CR sets `nodeDataDirVolumeClaim`. Enabling the field updates the pod template (rolling restart); `allow-sts-recreate` is not required. If you already have node-data disks under other names, set `nodeDataDirClaimName` — otherwise the operator creates empty PVCs and leaves the old volumes unused.
+**Import existing** (Nightly / Helm) — set `existingClaim: true`; `spec` is optional. Operator mounts `name` and does not create or take ownership:
+
+```yaml
+      nodeDataDirVolumeClaim:
+        name: node-data-dir-tc-project-teamcity-secondary-0
+        existingClaim: true
+        volumeMount:
+          name: node-data-dir
+          mountPath: /mnt/node-data-dir
+```
+
+Nightly claim name patterns (`tc-project` release):
+
+| Node | Pattern | Example |
+|---|---|---|
+| Main | `{fullname}-main-node-data-dir` | `tc-project-teamcity-main-node-data-dir` |
+| Secondary | `node-data-dir-{fullname}-secondary-{ordinal}` | `node-data-dir-tc-project-teamcity-secondary-0` |
+
+Upgrading the operator alone does nothing until a TeamCity CR sets per-node `nodeDataDirVolumeClaim`. Enabling the field updates the pod template (rolling restart); `allow-sts-recreate` is not required.
 
 During experimental zero-downtime upgrades, the temporary read-only replica uses an `emptyDir` at the same path (RWO cannot attach to two pods).
 
@@ -617,7 +626,7 @@ The operator passes these through to child resources without modification:
 | `spec.ingressList[].annotations` | Matching Ingress |
 | `spec.serviceAccount.annotations` | TeamCity ServiceAccount |
 | `spec.dataDirVolumeClaim.annotations` | Data directory PVC |
-| `spec.nodeDataDirVolumeClaim.annotations` | Per-node data directory PVCs (greenfield) |
+| `spec.*.nodeDataDirVolumeClaim.annotations` | Per-node data directory PVCs |
 | `spec.persistentVolumeClaims[].annotations` | Additional PVCs |
 
 Use these for integration with other cluster components — for example, `cluster-autoscaler.kubernetes.io/safe-to-evict` on node annotations, NGINX Ingress proxy settings on `ingressList` entries, or `eks.amazonaws.com/role-arn` on `serviceAccount` (see the ServiceAccount example above).
