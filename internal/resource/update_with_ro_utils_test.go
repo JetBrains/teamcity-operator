@@ -97,7 +97,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 					UID:       "uid-1",
 				},
 				Spec: TeamCitySpec{
-					Image: "jetbrains/teamcity-server:latest",
+					Image:         "jetbrains/teamcity-server:latest",
 					XmxPercentage: 95,
 					DataDirVolumeClaim: CustomPersistentVolumeClaim{
 						Name: "data-dir",
@@ -106,26 +106,26 @@ var _ = Describe("UpdateWithROUtils", func() {
 							MountPath: "/data/teamcity",
 						},
 					},
-					NodeDataDirVolumeClaim: &CustomPersistentVolumeClaim{
-						Name: "node-data-dir",
-						VolumeMount: v12.VolumeMount{
-							Name:      "node-data-dir",
-							MountPath: "/mnt/node-data-dir",
-						},
-						Spec: v12.PersistentVolumeClaimSpec{
-							Resources: v12.ResourceRequirements{
-								Requests: v12.ResourceList{
-									v12.ResourceStorage: resource.MustParse("1Gi"),
-								},
-							},
-						},
-					},
 					MainNode: Node{
 						Name: "main-node",
 						Spec: NodeSpec{
 							Requests: v12.ResourceList{
 								"cpu":    resource.MustParse("500m"),
 								"memory": resource.MustParse("1Gi"),
+							},
+							NodeDataDirVolumeClaim: &CustomPersistentVolumeClaim{
+								Name: "node-data-dir-main-node",
+								VolumeMount: v12.VolumeMount{
+									Name:      "node-data-dir",
+									MountPath: "/mnt/node-data-dir",
+								},
+								Spec: v12.PersistentVolumeClaimSpec{
+									Resources: v12.ResourceRequirements{
+										Requests: v12.ResourceList{
+											v12.ResourceStorage: resource.MustParse("1Gi"),
+										},
+									},
+								},
 							},
 						},
 					},

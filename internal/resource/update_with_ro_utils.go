@@ -19,12 +19,17 @@ const (
 )
 
 func BuildRoNode(instance *TeamCity, name string) Node {
-	return Node{
+	node := Node{
 		Name: name,
 		Spec: NodeSpec{
 			Requests: instance.Spec.MainNode.Spec.Requests,
 		},
 	}
+	if instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim != nil {
+		claim := *instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim
+		node.Spec.NodeDataDirVolumeClaim = &claim
+	}
+	return node
 }
 
 func GetROStatefulSetNamespacedName(instance *TeamCity) types.NamespacedName {
@@ -57,8 +62,8 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	}
 	roStatefulSet.Spec.Template.Spec = *mainStatefulSet.Spec.Template.Spec.DeepCopy()
 	roStatefulSet.Spec.Template.Labels = labels
-	if instance.NodeDataDirEnabled() {
-		replaceNodeDataDirWithEmptyDir(&roStatefulSet.Spec.Template.Spec, instance)
+	if node.Spec.NodeDataDirVolumeClaim != nil {
+		replaceNodeDataDirWithEmptyDir(&roStatefulSet.Spec.Template.Spec, node)
 	}
 	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
 	roStatefulSet.Spec.Template.Spec.Containers[0].Env = envVars
@@ -68,9 +73,9 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	return nil
 }
 
-func replaceNodeDataDirWithEmptyDir(podSpec *v12.PodSpec, instance *TeamCity) {
-	volumeName := instance.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
-	emptyDirVolume := createNodeDataDirEmptyDirVolume(instance)
+func replaceNodeDataDirWithEmptyDir(podSpec *v12.PodSpec, node Node) {
+	volumeName := node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
+	emptyDirVolume := createNodeDataDirEmptyDirVolume(node)
 	replaced := false
 	for i := range podSpec.Volumes {
 		if podSpec.Volumes[i].Name == volumeName {
