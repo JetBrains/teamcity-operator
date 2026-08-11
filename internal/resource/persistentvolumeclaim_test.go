@@ -106,6 +106,43 @@ var _ = Describe("PersistentVolumeClaim", func() {
 			Expect(objList[0].GetName()).To(Equal(Instance.Spec.DataDirVolumeClaim.Name))
 		})
 	})
+
+	Context("node data dir PVC retention", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+				DefaultClient = &pvcK8sClientMockWithNodeData{}
+			})
+		})
+		It("does not mark labeled node-data PVCs obsolete after feature disable", func() {
+			Instance.Spec.NodeDataDirVolumeClaim = nil
+			builder = &TeamCityResourceBuilder{
+				Instance: &Instance,
+				Scheme:   scheme,
+				Client:   DefaultClient,
+			}
+			DefaultPersistentVolumeClaimBuilder = builder.PersistentVolumeClaim()
+
+			obsoleteObjects, err := DefaultPersistentVolumeClaimBuilder.GetObsoleteObjects(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(obsoleteObjects)).To(Equal(1))
+			Expect(obsoleteObjects[0].GetName()).To(Equal(StalePvcName))
+		})
+		It("labels managed node-data PVCs", func() {
+			objList, err := DefaultPersistentVolumeClaimBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			var nodeDataObj client.Object
+			for _, obj := range objList {
+				if obj.GetName() == "node-data-dir-"+Instance.Spec.MainNode.Name {
+					nodeDataObj = obj
+					break
+				}
+			}
+			Expect(nodeDataObj).NotTo(BeNil())
+			Expect(DefaultPersistentVolumeClaimBuilder.Update(nodeDataObj)).To(Succeed())
+			Expect(nodeDataObj.GetLabels()["teamcity.jetbrains.com/node-data-dir"]).To(Equal("true"))
+		})
+	})
 })
 
 type pvcK8sClientMock struct {
@@ -126,6 +163,38 @@ func (m *pvcK8sClientMock) List(_ context.Context, list client.ObjectList, _ ...
 	}, v12.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: StalePvcName,
+		},
+	})
+	return nil
+}
+
+type pvcK8sClientMockWithNodeData struct {
+	client.Client
+}
+
+func (m *pvcK8sClientMockWithNodeData) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+	listPvc, ok := list.(*v12.PersistentVolumeClaimList)
+	if !ok {
+		return fmt.Errorf("unable to convert object list to pvc list")
+	}
+	listPvc.Items = append(listPvc.Items, v12.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-data-dir-main-node",
+			Labels: map[string]string{
+				"app.kubernetes.io/name":               TeamCityName,
+				"app.kubernetes.io/component":          "teamcity-server",
+				"app.kubernetes.io/part-of":            "teamcity",
+				"teamcity.jetbrains.com/node-data-dir": "true",
+			},
+		},
+	}, v12.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: StalePvcName,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      TeamCityName,
+				"app.kubernetes.io/component": "teamcity-server",
+				"app.kubernetes.io/part-of":   "teamcity",
+			},
 		},
 	})
 	return nil
