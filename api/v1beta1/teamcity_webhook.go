@@ -162,6 +162,81 @@ func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err er
 			return err
 		}
 	}
+	if err = validateNodeDataDirVolumeClaim(teamcity); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateNodeDataDirVolumeClaim(teamcity *TeamCity) error {
+	hasClaimNameOverride := teamcity.Spec.MainNode.Spec.NodeDataDirClaimName != ""
+	for _, secondary := range teamcity.Spec.SecondaryNodes {
+		if secondary.Spec.NodeDataDirClaimName != "" {
+			hasClaimNameOverride = true
+			break
+		}
+	}
+
+	if !teamcity.NodeDataDirEnabled() {
+		if hasClaimNameOverride {
+			return typed.ValidationError{
+				Path:         "teamcity.spec.nodeDataDirVolumeClaim",
+				ErrorMessage: "nodeDataDirVolumeClaim must be set when nodeDataDirClaimName is specified on a node",
+			}
+		}
+		return nil
+	}
+
+	if err := validateCustomPersistentVolumeClaim("teamcity.spec.nodeDataDirVolumeClaim", *teamcity.Spec.NodeDataDirVolumeClaim); err != nil {
+		return err
+	}
+
+	if err := validateNodeDataDirClaimName("teamcity.spec.mainNode", teamcity.Spec.MainNode); err != nil {
+		return err
+	}
+	for idx, secondary := range teamcity.Spec.SecondaryNodes {
+		if err := validateNodeDataDirClaimName(fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx), secondary); err != nil {
+			return err
+		}
+	}
+
+	reservedNames := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.Name: "teamcity.spec.dataDirVolumeClaim.name",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		reservedNames[additional.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].name", idx)
+	}
+
+	if path, exists := reservedNames[teamcity.Spec.NodeDataDirVolumeClaim.Name]; exists {
+		return typed.ValidationError{
+			Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
+			ErrorMessage: fmt.Sprintf("collides with %s", path),
+		}
+	}
+
+	for _, node := range teamcity.GetAllNodes() {
+		derivedName := teamcity.NodeDataDirPVCName(node.Name)
+		if path, exists := reservedNames[derivedName]; exists {
+			return typed.ValidationError{
+				Path:         "teamcity.spec.nodeDataDirVolumeClaim.name",
+				ErrorMessage: fmt.Sprintf("derived PVC name %q collides with %s", derivedName, path),
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateNodeDataDirClaimName(objectPath string, node Node) error {
+	if node.Spec.NodeDataDirClaimName == "" {
+		return nil
+	}
+	if strings.TrimSpace(node.Spec.NodeDataDirClaimName) == "" {
+		return typed.ValidationError{
+			Path:         fmt.Sprintf("%s.spec.nodeDataDirClaimName", objectPath),
+			ErrorMessage: "nodeDataDirClaimName cannot be blank",
+		}
+	}
 	return nil
 }
 
