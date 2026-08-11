@@ -30,15 +30,18 @@ func (builder PersistentVolumeClaimBuilder) BuildObjectList() ([]client.Object, 
 			ObjectMeta: metav1.ObjectMeta{Name: pvc.Name, Namespace: builder.Instance.Namespace},
 		})
 	}
+	for _, nodeDataPVC := range builder.nodeDataDirClaimsToManage() {
+		objectList = append(objectList, &v12.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: nodeDataPVC.Name, Namespace: builder.Instance.Namespace},
+		})
+	}
 	return objectList, nil
 }
 
 func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
-	var idx int
-	var pvcList []CustomPersistentVolumeClaim
-	pvcList = append(pvcList, builder.Instance.Spec.DataDirVolumeClaim)
-	pvcList = append(pvcList, builder.Instance.Spec.PersistentVolumeClaims...)
-	if idx = builder.getPVCIndex(object, pvcList); idx == -1 {
+	pvcList := builder.allManagedClaims()
+	idx := builder.getPVCIndex(object, pvcList)
+	if idx == -1 {
 		return fmt.Errorf("failed to update object: %w", errors.New("the specified PVC does not exist: "+object.GetName()))
 	}
 
@@ -67,7 +70,6 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 func (builder PersistentVolumeClaimBuilder) GetObsoleteObjects(ctx context.Context) ([]client.Object, error) {
 	currentPVCList := &v12.PersistentVolumeClaimList{}
 	var obsoleteObjects []client.Object
-	var pvcList []CustomPersistentVolumeClaim
 
 	listOptions := []client.ListOption{
 		client.InNamespace(builder.Instance.Namespace),
@@ -77,12 +79,10 @@ func (builder PersistentVolumeClaimBuilder) GetObsoleteObjects(ctx context.Conte
 		return nil, err
 	}
 
-	pvcList = append(pvcList, builder.Instance.Spec.DataDirVolumeClaim)
-	pvcList = append(pvcList, builder.Instance.Spec.PersistentVolumeClaims...)
+	pvcList := builder.allManagedClaims()
 	for _, pvc := range currentPVCList.Items {
-		var idx int
 		s := pvc
-		if idx = builder.getPVCIndex(&pvc, pvcList); idx == -1 {
+		if idx := builder.getPVCIndex(&pvc, pvcList); idx == -1 {
 			obsoleteObjects = append(obsoleteObjects, &s)
 		}
 	}
@@ -100,4 +100,28 @@ func (builder PersistentVolumeClaimBuilder) getPVCIndex(object client.Object, pv
 		}
 	}
 	return -1
+}
+
+func (builder PersistentVolumeClaimBuilder) allManagedClaims() []CustomPersistentVolumeClaim {
+	pvcList := []CustomPersistentVolumeClaim{builder.Instance.Spec.DataDirVolumeClaim}
+	pvcList = append(pvcList, builder.Instance.Spec.PersistentVolumeClaims...)
+	pvcList = append(pvcList, builder.nodeDataDirClaimsToManage()...)
+	return pvcList
+}
+
+func (builder PersistentVolumeClaimBuilder) nodeDataDirClaimsToManage() []CustomPersistentVolumeClaim {
+	if !builder.Instance.NodeDataDirEnabled() {
+		return nil
+	}
+	template := builder.Instance.Spec.NodeDataDirVolumeClaim
+	var claims []CustomPersistentVolumeClaim
+	for _, node := range builder.Instance.GetAllNodes() {
+		if node.Spec.NodeDataDirClaimName != "" {
+			continue
+		}
+		claim := *template
+		claim.Name = builder.Instance.NodeDataDirPVCName(node.Name)
+		claims = append(claims, claim)
+	}
+	return claims
 }

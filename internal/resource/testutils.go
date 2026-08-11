@@ -215,6 +215,31 @@ func getAdditionalPVC() CustomPersistentVolumeClaim {
 	}
 }
 
+func getNodeDataDirTemplate() *CustomPersistentVolumeClaim {
+	storageClass := "standard"
+	return &CustomPersistentVolumeClaim{
+		Name: "node-data-dir",
+		VolumeMount: corev1.VolumeMount{
+			Name:      "node-data-dir",
+			MountPath: "/mnt/node-data-dir",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"},
+			StorageClassName: &storageClass,
+			VolumeMode:       &dataDirPVCVolumeMode,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+}
+
+func getSecondaryNode() Node {
+	return getNode("secondary-node", make(map[string]string), requests, []string{"CAN_PROCESS_BUILD_MESSAGES"})
+}
+
 func getServiceList() []Service {
 	return []Service{
 		{

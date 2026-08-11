@@ -65,6 +65,47 @@ var _ = Describe("PersistentVolumeClaim", func() {
 			Expect(obsoleteObjects[0].GetName()).To(Equal(StalePvcName))
 		})
 	})
+
+	Context("TeamCity with node data dir greenfield", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = []Node{getSecondaryNode()}
+				teamcity.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+			})
+		})
+		It("creates one node-data PVC per node without claim overrides", func() {
+			objList, err := DefaultPersistentVolumeClaimBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objList)).To(Equal(3))
+
+			names := []string{objList[0].GetName(), objList[1].GetName(), objList[2].GetName()}
+			Expect(names).To(ContainElement(Instance.Spec.DataDirVolumeClaim.Name))
+			Expect(names).To(ContainElement("node-data-dir-" + Instance.Spec.MainNode.Name))
+			Expect(names).To(ContainElement("node-data-dir-" + Instance.Spec.SecondaryNodes[0].Name))
+
+			for _, obj := range objList[1:] {
+				err = DefaultPersistentVolumeClaimBuilder.Update(obj)
+				Expect(err).NotTo(HaveOccurred())
+				actual := obj.(*v12.PersistentVolumeClaim)
+				Expect(actual.Spec.Resources).To(Equal(Instance.Spec.NodeDataDirVolumeClaim.Spec.Resources))
+			}
+		})
+	})
+
+	Context("TeamCity with node data dir adopt", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+				teamcity.Spec.MainNode.Spec.NodeDataDirClaimName = "existing-main-node-data"
+			})
+		})
+		It("does not create a PVC for nodes with claim overrides", func() {
+			objList, err := DefaultPersistentVolumeClaimBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objList)).To(Equal(1))
+			Expect(objList[0].GetName()).To(Equal(Instance.Spec.DataDirVolumeClaim.Name))
+		})
+	})
 })
 
 type pvcK8sClientMock struct {
