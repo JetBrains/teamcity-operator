@@ -176,8 +176,16 @@ func TestGetAllCustomPersistentVolumeClaim(t *testing.T) {
 }
 
 func TestNodeDataDirHelpers(t *testing.T) {
-	template := &CustomPersistentVolumeClaim{
-		Name: "node-data-dir",
+	mainClaim := &CustomPersistentVolumeClaim{
+		Name: "node-data-dir-main-node",
+		VolumeMount: corev1.VolumeMount{
+			Name:      "node-data-dir",
+			MountPath: "/mnt/node-data-dir",
+		},
+	}
+	secondaryClaim := &CustomPersistentVolumeClaim{
+		Name:          "existing-secondary-claim",
+		ExistingClaim: true,
 		VolumeMount: corev1.VolumeMount{
 			Name:      "node-data-dir",
 			MountPath: "/mnt/node-data-dir",
@@ -185,26 +193,25 @@ func TestNodeDataDirHelpers(t *testing.T) {
 	}
 	instance := TeamCity{
 		Spec: TeamCitySpec{
-			NodeDataDirVolumeClaim: template,
 			MainNode: Node{
 				Name: "main-node",
+				Spec: NodeSpec{NodeDataDirVolumeClaim: mainClaim},
 			},
 			SecondaryNodes: []Node{
-				{Name: "secondary-node", Spec: NodeSpec{NodeDataDirClaimName: "existing-secondary-claim"}},
+				{Name: "secondary-node", Spec: NodeSpec{NodeDataDirVolumeClaim: secondaryClaim}},
 			},
 		},
 	}
 
 	assert.True(t, instance.NodeDataDirEnabled())
-	assert.Equal(t, "/mnt/node-data-dir", instance.NodeDataDirPath())
-	assert.Equal(t, "node-data-dir-main-node", instance.NodeDataDirPVCName("main-node"))
+	assert.True(t, instance.NodeDataDirEnabledFor(instance.Spec.MainNode))
+	assert.Equal(t, "/mnt/node-data-dir", instance.NodeDataDirPathFor(instance.Spec.MainNode))
 	assert.Equal(t, "node-data-dir-main-node", instance.NodeDataDirClaimNameFor(instance.Spec.MainNode))
 	assert.Equal(t, "existing-secondary-claim", instance.NodeDataDirClaimNameFor(instance.Spec.SecondaryNodes[0]))
 
 	disabled := TeamCity{}
 	assert.False(t, disabled.NodeDataDirEnabled())
-	assert.Equal(t, "", disabled.NodeDataDirPath())
-	assert.Equal(t, "", disabled.NodeDataDirPVCName("main-node"))
+	assert.Equal(t, "", disabled.NodeDataDirPathFor(Node{Name: "main-node"}))
 	assert.Equal(t, "", disabled.NodeDataDirClaimNameFor(Node{Name: "main-node"}))
 }
 

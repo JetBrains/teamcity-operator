@@ -36,7 +36,6 @@ type TeamCitySpec struct {
 	SecondaryNodes         []Node                        `json:"secondaryNodes,omitempty"`
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
-	NodeDataDirVolumeClaim *CustomPersistentVolumeClaim  `json:"nodeDataDirVolumeClaim,omitempty"`
 
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
@@ -83,7 +82,7 @@ type NodeSpec struct {
 
 	Responsibilities []string `json:"responsibilities,omitempty"`
 
-	NodeDataDirClaimName string `json:"nodeDataDirClaimName,omitempty"`
+	NodeDataDirVolumeClaim *CustomPersistentVolumeClaim `json:"nodeDataDirVolumeClaim,omitempty"`
 }
 
 type Node struct {
@@ -104,10 +103,11 @@ type DatabaseSecret struct {
 }
 
 type CustomPersistentVolumeClaim struct {
-	Name        string                       `json:"name"`
-	Annotations map[string]string            `json:"annotations,omitempty"`
-	VolumeMount v1.VolumeMount               `json:"volumeMount"`
-	Spec        v1.PersistentVolumeClaimSpec `json:"spec"`
+	Name          string                       `json:"name"`
+	Annotations   map[string]string            `json:"annotations,omitempty"`
+	VolumeMount   v1.VolumeMount               `json:"volumeMount"`
+	Spec          v1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
+	ExistingClaim bool                         `json:"existingClaim,omitempty"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity
@@ -166,31 +166,30 @@ func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistent
 }
 
 func (instance *TeamCity) NodeDataDirEnabled() bool {
-	return instance.Spec.NodeDataDirVolumeClaim != nil
+	for _, node := range instance.GetAllNodes() {
+		if node.Spec.NodeDataDirVolumeClaim != nil {
+			return true
+		}
+	}
+	return false
 }
 
-func (instance *TeamCity) NodeDataDirPath() string {
-	if !instance.NodeDataDirEnabled() {
-		return ""
-	}
-	return instance.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath
+func (instance *TeamCity) NodeDataDirEnabledFor(node Node) bool {
+	return node.Spec.NodeDataDirVolumeClaim != nil
 }
 
-func (instance *TeamCity) NodeDataDirPVCName(nodeName string) string {
-	if !instance.NodeDataDirEnabled() {
+func (instance *TeamCity) NodeDataDirPathFor(node Node) string {
+	if node.Spec.NodeDataDirVolumeClaim == nil {
 		return ""
 	}
-	return instance.Spec.NodeDataDirVolumeClaim.Name + "-" + nodeName
+	return node.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath
 }
 
 func (instance *TeamCity) NodeDataDirClaimNameFor(node Node) string {
-	if !instance.NodeDataDirEnabled() {
+	if node.Spec.NodeDataDirVolumeClaim == nil {
 		return ""
 	}
-	if node.Spec.NodeDataDirClaimName != "" {
-		return node.Spec.NodeDataDirClaimName
-	}
-	return instance.NodeDataDirPVCName(node.Name)
+	return node.Spec.NodeDataDirVolumeClaim.Name
 }
 
 func (instance *TeamCity) ServiceAccountProvided() bool {
