@@ -17,66 +17,37 @@ func TestValidateNodeDataDirAbsentIsOk(t *testing.T) {
 
 func TestValidateNodeDataDirGreenfield(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = validNodeDataDirClaim("node-data-dir-main-node")
 	_, err := tc.ValidateCreate()
 	require.NoError(t, err)
 }
 
-func TestValidateNodeDataDirClaimNameRequiresTemplate(t *testing.T) {
+func TestValidateNodeDataDirExistingClaimWithoutSpec(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.MainNode.Spec.NodeDataDirClaimName = "existing-claim"
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = &CustomPersistentVolumeClaim{
+		Name:          "existing-node-data-dir",
+		ExistingClaim: true,
+		VolumeMount: corev1.VolumeMount{
+			Name:      "node-data-dir",
+			MountPath: "/mnt/node-data-dir",
+		},
+	}
 	_, err := tc.ValidateCreate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nodeDataDirVolumeClaim must be set")
-}
-
-func TestValidateNodeDataDirBlankClaimName(t *testing.T) {
-	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	tc.Spec.MainNode.Spec.NodeDataDirClaimName = "   "
-	_, err := tc.ValidateCreate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot be blank")
+	require.NoError(t, err)
 }
 
 func TestValidateNodeDataDirNameCollision(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	tc.Spec.NodeDataDirVolumeClaim.Name = tc.Spec.DataDirVolumeClaim.Name
+	claim := validNodeDataDirClaim(tc.Spec.DataDirVolumeClaim.Name)
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = claim
 	_, err := tc.ValidateCreate()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "collides")
-}
-
-func TestValidateNodeDataDirDerivedNameCollision(t *testing.T) {
-	tc := validTeamCityForWebhookTest()
-	tc.Spec.MainNode.Name = "main"
-	tc.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{
-		{
-			Name: "node-data-dir-main",
-			VolumeMount: corev1.VolumeMount{
-				Name:      "extra",
-				MountPath: "/extra",
-			},
-			Spec: corev1.PersistentVolumeClaimSpec{
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse("1Gi"),
-					},
-				},
-			},
-		},
-	}
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	_, err := tc.ValidateCreate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "derived PVC name")
+	assert.Contains(t, err.Error(), "collides with")
 }
 
 func TestValidateNodeDataDirDuplicateClaimNames(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	tc.Spec.MainNode.Spec.NodeDataDirClaimName = "shared-claim"
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = validNodeDataDirClaim("shared-claim")
 	tc.Spec.SecondaryNodes = []Node{
 		{
 			Name: "secondary",
@@ -85,7 +56,7 @@ func TestValidateNodeDataDirDuplicateClaimNames(t *testing.T) {
 					"cpu":    resource.MustParse("500m"),
 					"memory": resource.MustParse("1Gi"),
 				},
-				NodeDataDirClaimName: "shared-claim",
+				NodeDataDirVolumeClaim: validNodeDataDirClaim("shared-claim"),
 			},
 		},
 	}
@@ -96,8 +67,9 @@ func TestValidateNodeDataDirDuplicateClaimNames(t *testing.T) {
 
 func TestValidateNodeDataDirMountPathCollision(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	tc.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath = tc.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+	claim := validNodeDataDirClaim("node-data-dir-main-node")
+	claim.VolumeMount.MountPath = tc.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = claim
 	_, err := tc.ValidateCreate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "volumeMount.mountPath")
@@ -105,8 +77,9 @@ func TestValidateNodeDataDirMountPathCollision(t *testing.T) {
 
 func TestValidateNodeDataDirVolumeNameCollision(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
-	tc.Spec.NodeDataDirVolumeClaim.VolumeMount.Name = tc.Spec.DataDirVolumeClaim.VolumeMount.Name
+	claim := validNodeDataDirClaim("node-data-dir-main-node")
+	claim.VolumeMount.Name = tc.Spec.DataDirVolumeClaim.VolumeMount.Name
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = claim
 	_, err := tc.ValidateCreate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "volumeMount.name")
@@ -114,7 +87,7 @@ func TestValidateNodeDataDirVolumeNameCollision(t *testing.T) {
 
 func TestValidateNodeDataDirStartupPropertyRejected(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.NodeDataDirVolumeClaim = validNodeDataDirTemplate()
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = validNodeDataDirClaim("node-data-dir-main-node")
 	tc.Spec.StartupPropertiesConfig = map[string]string{
 		"teamcity.node.data.path": "/wrong",
 	}
@@ -123,14 +96,37 @@ func TestValidateNodeDataDirStartupPropertyRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "startupPropertiesConfig")
 }
 
-func validNodeDataDirTemplate() *CustomPersistentVolumeClaim {
+func TestValidateNodeDataDirMountMustMatchAcrossNodes(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.MainNode.Spec.NodeDataDirVolumeClaim = validNodeDataDirClaim("node-data-dir-main-node")
+	secondaryClaim := validNodeDataDirClaim("node-data-dir-secondary-node")
+	secondaryClaim.VolumeMount.MountPath = "/other"
+	tc.Spec.SecondaryNodes = []Node{
+		{
+			Name: "secondary",
+			Spec: NodeSpec{
+				Requests: corev1.ResourceList{
+					"cpu":    resource.MustParse("500m"),
+					"memory": resource.MustParse("1Gi"),
+				},
+				NodeDataDirVolumeClaim: secondaryClaim,
+			},
+		},
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must match other nodes")
+}
+
+func validNodeDataDirClaim(name string) *CustomPersistentVolumeClaim {
 	return &CustomPersistentVolumeClaim{
-		Name: "node-data-dir",
+		Name: name,
 		VolumeMount: corev1.VolumeMount{
 			Name:      "node-data-dir",
 			MountPath: "/mnt/node-data-dir",
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
