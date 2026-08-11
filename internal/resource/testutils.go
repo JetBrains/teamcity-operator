@@ -215,10 +215,10 @@ func getAdditionalPVC() CustomPersistentVolumeClaim {
 	}
 }
 
-func getNodeDataDirTemplate() *CustomPersistentVolumeClaim {
+func getNodeDataDirClaim(name string) *CustomPersistentVolumeClaim {
 	storageClass := "standard"
 	return &CustomPersistentVolumeClaim{
-		Name: "node-data-dir",
+		Name: name,
 		VolumeMount: corev1.VolumeMount{
 			Name:      "node-data-dir",
 			MountPath: "/mnt/node-data-dir",

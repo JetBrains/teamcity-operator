@@ -132,14 +132,11 @@ func (builder PersistentVolumeClaimBuilder) desiredClaimNamesForObsoleteCheck() 
 
 func (builder PersistentVolumeClaimBuilder) retainedNodeDataClaimNames() map[string]struct{} {
 	names := map[string]struct{}{}
-	if !builder.Instance.NodeDataDirEnabled() {
-		return names
-	}
 	for _, node := range builder.Instance.GetAllNodes() {
-		names[builder.Instance.NodeDataDirClaimNameFor(node)] = struct{}{}
-	}
-	for _, claim := range builder.nodeDataDirClaimsToManage() {
-		names[claim.Name] = struct{}{}
+		if node.Spec.NodeDataDirVolumeClaim == nil {
+			continue
+		}
+		names[node.Spec.NodeDataDirVolumeClaim.Name] = struct{}{}
 	}
 	return names
 }
@@ -154,18 +151,15 @@ func (builder PersistentVolumeClaimBuilder) isManagedNodeDataDirClaim(name strin
 }
 
 func (builder PersistentVolumeClaimBuilder) nodeDataDirClaimsToManage() []CustomPersistentVolumeClaim {
-	if !builder.Instance.NodeDataDirEnabled() {
-		return nil
-	}
-	template := builder.Instance.Spec.NodeDataDirVolumeClaim
 	var claims []CustomPersistentVolumeClaim
 	for _, node := range builder.Instance.GetAllNodes() {
-		if node.Spec.NodeDataDirClaimName != "" {
+		if node.Spec.NodeDataDirVolumeClaim == nil {
 			continue
 		}
-		claim := *template
-		claim.Name = builder.Instance.NodeDataDirPVCName(node.Name)
-		claims = append(claims, claim)
+		if node.Spec.NodeDataDirVolumeClaim.ExistingClaim {
+			continue
+		}
+		claims = append(claims, *node.Spec.NodeDataDirVolumeClaim)
 	}
 	return claims
 }
