@@ -306,10 +306,10 @@ var _ = Describe("StatefulSet", func() {
 
 		})
 		It("ignores teamcity.node.data.path from startup properties when node data dir is set", func() {
-			Instance.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+			Instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim = getNodeDataDirClaim("node-data-dir-" + Instance.Spec.MainNode.Name)
 			Instance.Spec.StartupPropertiesConfig = map[string]string{
-				"teamcity.node.data.path":             "/wrong",
-				"teamcity.startup.maintenance":        "false",
+				"teamcity.node.data.path":      "/wrong",
+				"teamcity.startup.maintenance": "false",
 			}
 			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
@@ -345,7 +345,7 @@ var _ = Describe("StatefulSet", func() {
 	Context("TeamCity with node data dir", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
-				teamcity.Spec.NodeDataDirVolumeClaim = getNodeDataDirTemplate()
+				teamcity.Spec.MainNode.Spec.NodeDataDirVolumeClaim = getNodeDataDirClaim("node-data-dir-" + teamcity.Spec.MainNode.Name)
 			})
 		})
 		It("mounts per-node claim and sets JVM property", func() {
@@ -368,8 +368,15 @@ var _ = Describe("StatefulSet", func() {
 			serverOptsEnvVarIndex := slices.IndexFunc(container.Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
 			Expect(container.Env[serverOptsEnvVarIndex].Value).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
 		})
-		It("uses claim name override when set", func() {
-			Instance.Spec.MainNode.Spec.NodeDataDirClaimName = "existing-main-claim"
+		It("mounts existingClaim name when set", func() {
+			Instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim = &CustomPersistentVolumeClaim{
+				Name:          "existing-main-claim",
+				ExistingClaim: true,
+				VolumeMount: v12.VolumeMount{
+					Name:      "node-data-dir",
+					MountPath: "/mnt/node-data-dir",
+				},
+			}
 			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
 			stsObject := obj[0]
@@ -377,6 +384,8 @@ var _ = Describe("StatefulSet", func() {
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := stsObject.(*v1.StatefulSet)
 			Expect(statefulSet.Spec.Template.Spec.Volumes[1].PersistentVolumeClaim.ClaimName).To(Equal("existing-main-claim"))
+			serverOptsEnvVarIndex := slices.IndexFunc(statefulSet.Spec.Template.Spec.Containers[0].Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Env[serverOptsEnvVarIndex].Value).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
 		})
 	})
 	Context("TeamCity without node data dir remains unchanged", func() {
