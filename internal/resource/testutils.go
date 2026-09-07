@@ -291,6 +291,29 @@ func getConfigMapVolume() TeamCityVolume {
 	}
 }
 
+func getNamedConfigMapVolume(volumeName string, configMapName string, mountPath string) TeamCityVolume {
+	return TeamCityVolume{
+		Volume: corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
+				},
+			},
+		},
+		Mount: &corev1.VolumeMount{MountPath: mountPath},
+	}
+}
+
+func configMapNameOf(statefulSet *appsv1.StatefulSet, volumeName string) string {
+	for _, volume := range statefulSet.Spec.Template.Spec.Volumes {
+		if volume.Name == volumeName && volume.ConfigMap != nil {
+			return volume.ConfigMap.Name
+		}
+	}
+	return ""
+}
+
 func getUnmountedSecretVolume() TeamCityVolume {
 	return TeamCityVolume{
 		Volume: corev1.Volume{

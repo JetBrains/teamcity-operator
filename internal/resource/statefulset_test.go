@@ -437,6 +437,38 @@ var _ = Describe("StatefulSet", func() {
 			Expect(mountByName(statefulSet.Spec.Template.Spec.Containers[0], "database-secret")).To(BeNil())
 		})
 	})
+	Context("TeamCity with a different ConfigMap per node", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = []Node{getSecondaryNode()}
+				teamcity.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+					getNamedConfigMapVolume("nodeconfig", "tc-config-main", "/mnt/nodeconfig"),
+				}
+				teamcity.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+					getNamedConfigMapVolume("nodeconfig", "tc-config-secondary", "/mnt/nodeconfig"),
+				}
+			})
+		})
+		It("gives each node its own ConfigMap behind a shared volume name and path", func() {
+			mainObj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultStatefulSetBuilder.Update(mainObj[0])).To(Succeed())
+			mainSts := mainObj[0].(*v1.StatefulSet)
+
+			secondaryObj, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultSecondaryStatefulSetBuilder.Update(secondaryObj[0])).To(Succeed())
+			secondarySts := secondaryObj[0].(*v1.StatefulSet)
+
+			Expect(configMapNameOf(mainSts, "nodeconfig")).To(Equal("tc-config-main"))
+			Expect(configMapNameOf(secondarySts, "nodeconfig")).To(Equal("tc-config-secondary"))
+
+			Expect(mountByName(mainSts.Spec.Template.Spec.Containers[0], "nodeconfig").MountPath).
+				To(Equal("/mnt/nodeconfig"))
+			Expect(mountByName(secondarySts.Spec.Template.Spec.Containers[0], "nodeconfig").MountPath).
+				To(Equal("/mnt/nodeconfig"))
+		})
+	})
 	Context("TeamCity with per-node persistent volume claims", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {

@@ -521,7 +521,30 @@ spec:
 
 Above, `database-secret` is mounted on every node, `git-key` is available to init containers only, and `nodeconfig` exists on `secondary-node` alone. Init containers declared in `spec.*.spec.initContainers` reference these volumes by name in their own `volumeMounts`.
 
-A node receives `spec.volumes[]` plus its own `spec.volumes[]`. Within that merged set, names and mount paths must be unique, and must not collide with the data directory, `spec.persistentVolumeClaims[]`, or any per-node claim. Two nodes may reuse the same volume name or mount path, since they never share a pod. `hostPath` sources are accepted but produce an admission warning, since their contents are tied to the Kubernetes node the pod lands on.
+Because two nodes never share a pod, they may reuse the same volume name and mount path while pointing at different objects. This is how you give each node its own configuration or credentials:
+
+```yaml
+  mainNode:
+    name: main-node
+    spec:
+      volumes:
+        - name: nodeconfig
+          configMap:
+            name: tc-config-main
+          mount:
+            mountPath: /mnt/nodeconfig
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        volumes:
+          - name: nodeconfig
+            configMap:
+              name: tc-config-secondary
+            mount:
+              mountPath: /mnt/nodeconfig
+```
+
+A node receives `spec.volumes[]` plus its own `spec.volumes[]`. Within that merged set, names and mount paths must be unique, and must not collide with the data directory, `spec.persistentVolumeClaims[]`, or any per-node claim. `hostPath` sources are accepted but produce an admission warning, since their contents are tied to the Kubernetes node the pod lands on.
 
 ### Per-node persistent volume claims
 
