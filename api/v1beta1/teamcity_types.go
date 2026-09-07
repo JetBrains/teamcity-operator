@@ -36,7 +36,12 @@ type TeamCitySpec struct {
 	SecondaryNodes         []Node                        `json:"secondaryNodes,omitempty"`
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
-	Volumes                []TeamCityVolume              `json:"volumes,omitempty"`
+
+	// Volumes to attach to the TeamCity pods, using any Kubernetes volume source
+	// (ConfigMap, Secret, CSI, emptyDir, an existing PersistentVolumeClaim, ...).
+	// Volume names must be unique and must not collide with the names used by
+	// dataDirVolumeClaim, persistentVolumeClaims or any per-node claim.
+	Volumes []TeamCityVolume `json:"volumes,omitempty"`
 
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
@@ -85,6 +90,11 @@ type NodeSpec struct {
 
 	NodeDataDirVolumeClaim *CustomPersistentVolumeClaim `json:"nodeDataDirVolumeClaim,omitempty"`
 
+	// PersistentVolumeClaims owned by this node alone, for example a git cache.
+	// Every node names its own claim, so nodes may use different storage classes
+	// and sizes behind the same mount path. The operator creates and manages each
+	// claim unless existingClaim is true, and never deletes it: removing an entry
+	// detaches the volume but leaves the data in place.
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 }
 
@@ -113,11 +123,19 @@ type CustomPersistentVolumeClaim struct {
 	ExistingClaim bool                         `json:"existingClaim,omitempty"`
 }
 
+// TeamCityVolume is a Kubernetes volume plus the operator-specific fields that
+// control where it is mounted and which nodes receive it.
 type TeamCityVolume struct {
 	v1.Volume `json:",inline"`
 
+	// Mount describes where to mount this volume inside the teamcity-server
+	// container. Omit it to define the volume without mounting it, which is
+	// useful when only an init container needs the volume; the init container
+	// then references it by name in its own volumeMounts.
 	Mount *v1.VolumeMount `json:"mount,omitempty"`
 
+	// Nodes limits this volume to the named nodes, matching mainNode.name or
+	// secondaryNodes[].name. Leave empty to attach the volume to every node.
 	Nodes []string `json:"nodes,omitempty"`
 }
 

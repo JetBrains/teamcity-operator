@@ -3344,6 +3344,12 @@ spec:
                           type: string
                         type: object
                       persistentVolumeClaims:
+                        description: |-
+                          PersistentVolumeClaims owned by this node alone, for example a git cache.
+                          Every node names its own claim, so nodes may use different storage classes
+                          and sizes behind the same mount path. The operator creates and manages each
+                          claim unless existingClaim is true, and never deletes it: removing an entry
+                          detaches the volume but leaves the data in place.
                         items:
                           properties:
                             annotations:
@@ -7127,6 +7133,12 @@ spec:
                             type: string
                           type: object
                         persistentVolumeClaims:
+                          description: |-
+                            PersistentVolumeClaims owned by this node alone, for example a git cache.
+                            Every node names its own claim, so nodes may use different storage classes
+                            and sizes behind the same mount path. The operator creates and manages each
+                            claim unless existingClaim is true, and never deletes it: removing an entry
+                            detaches the volume but leaves the data in place.
                           items:
                             properties:
                               annotations:
@@ -8289,7 +8301,15 @@ spec:
                 default: {}
                 type: object
               volumes:
+                description: |-
+                  Volumes to attach to the TeamCity pods, using any Kubernetes volume source
+                  (ConfigMap, Secret, CSI, emptyDir, an existing PersistentVolumeClaim, ...).
+                  Volume names must be unique and must not collide with the names used by
+                  dataDirVolumeClaim, persistentVolumeClaims or any per-node claim.
                 items:
+                  description: |-
+                    TeamCityVolume is a Kubernetes volume plus the operator-specific fields that
+                    control where it is mounted and which nodes receive it.
                   properties:
                     awsElasticBlockStore:
                       description: |-
@@ -9257,8 +9277,11 @@ spec:
                       - targetPortal
                       type: object
                     mount:
-                      description: VolumeMount describes a mounting of a Volume within
-                        a container.
+                      description: |-
+                        Mount describes where to mount this volume inside the teamcity-server
+                        container. Omit it to define the volume without mounting it, which is
+                        useful when only an init container needs the volume; the init container
+                        then references it by name in its own volumeMounts.
                       properties:
                         mountPath:
                           description: |-
@@ -9328,6 +9351,9 @@ spec:
                       - server
                       type: object
                     nodes:
+                      description: |-
+                        Nodes limits this volume to the named nodes, matching mainNode.name or
+                        secondaryNodes[].name. Leave empty to attach the volume to every node.
                       items:
                         type: string
                       type: array
