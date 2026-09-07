@@ -347,6 +347,92 @@ verify_pvc_absent() {
   echo_step_completed
 }
 
+# Create the ConfigMaps and Secret referenced by the custom mounts sample.
+create_custom_mount_sources() {
+  local ns="$1"
+
+  "${KUBECTL}" create configmap teamcity-extra-config -n "${ns}" \
+    --from-literal=extra.properties="some.property=value" \
+    2>/dev/null || true
+  "${KUBECTL}" create configmap teamcity-node-config -n "${ns}" \
+    --from-literal=node.properties="secondary.only=true" \
+    2>/dev/null || true
+  "${KUBECTL}" create secret generic git-key -n "${ns}" \
+    --from-literal=id_rsa="not-a-real-key" \
+    2>/dev/null || true
+}
+
+# Assert a StatefulSet defines a volume backed by the given ConfigMap or Secret.
+verify_sts_volume_source() {
+  local ns="$1"
+  local sts="$2"
+  local volume_name="$3"
+  local source_field="$4"
+  local expected="$5"
+
+  local actual
+  actual=$("${KUBECTL}" get statefulset "${sts}" -n "${ns}" \
+    -o jsonpath="{.spec.template.spec.volumes[?(@.name==\"${volume_name}\")].${source_field}}" \
+    2>/dev/null)
+  if [ "${actual}" != "${expected}" ]; then
+    echo_error "StatefulSet ${sts}: volume ${volume_name} ${source_field}='${actual}', expected '${expected}'"
+  fi
+  echo_info "  sts/${sts} volume ${volume_name} -> ${expected}"
+  echo_step_completed
+}
+
+# Assert a StatefulSet does not define a volume with the given name.
+verify_sts_volume_absent() {
+  local ns="$1"
+  local sts="$2"
+  local volume_name="$3"
+
+  local actual
+  actual=$("${KUBECTL}" get statefulset "${sts}" -n "${ns}" \
+    -o jsonpath="{.spec.template.spec.volumes[?(@.name==\"${volume_name}\")].name}" \
+    2>/dev/null)
+  if [ -n "${actual}" ]; then
+    echo_error "StatefulSet ${sts}: volume ${volume_name} should not be defined"
+  fi
+  echo_info "  sts/${sts} volume ${volume_name} absent (as expected)"
+  echo_step_completed
+}
+
+# Assert the TeamCity container mounts a volume at the expected path.
+verify_sts_container_mount_path() {
+  local ns="$1"
+  local sts="$2"
+  local volume_name="$3"
+  local expected_path="$4"
+
+  local actual
+  actual=$("${KUBECTL}" get statefulset "${sts}" -n "${ns}" \
+    -o jsonpath="{.spec.template.spec.containers[0].volumeMounts[?(@.name==\"${volume_name}\")].mountPath}" \
+    2>/dev/null)
+  if [ "${actual}" != "${expected_path}" ]; then
+    echo_error "StatefulSet ${sts}: container mount ${volume_name} at '${actual}', expected '${expected_path}'"
+  fi
+  echo_info "  sts/${sts} container mounts ${volume_name} at ${expected_path}"
+  echo_step_completed
+}
+
+# Assert the TeamCity container does not mount a volume.
+verify_sts_container_mount_absent() {
+  local ns="$1"
+  local sts="$2"
+  local volume_name="$3"
+
+  local actual
+  actual=$("${KUBECTL}" get statefulset "${sts}" -n "${ns}" \
+    -o jsonpath="{.spec.template.spec.containers[0].volumeMounts[?(@.name==\"${volume_name}\")].name}" \
+    2>/dev/null)
+  if [ -n "${actual}" ]; then
+    echo_error "StatefulSet ${sts}: container should not mount ${volume_name}"
+  fi
+  echo_info "  sts/${sts} container does not mount ${volume_name} (as expected)"
+  echo_step_completed
+}
+
 # Assert StatefulSet mounts a PVC claim by volume name.
 verify_sts_volume_claim() {
   local ns="$1"
@@ -732,6 +818,39 @@ test_with_node_data_dir_adopt() {
   cleanup_namespace "${ns}"
 }
 
+# --- 16. TeamCity with custom volumes and per-node PVCs --------------------
+test_with_custom_mounts() {
+  local ns="test-custom-mounts"
+  create_namespace "${ns}"
+
+  create_custom_mount_sources "${ns}"
+  apply_sample "${samplesdir}/_v1beta1_teamcity_with_custom_mounts.yaml" "${ns}"
+  wait_for_statefulsets "${ns}" 2
+
+  verify_resource_exists "${ns}" statefulset 2
+  verify_resource_exists "${ns}" pvc 3
+
+  verify_pvc_named "${ns}" "teamcity-data-dir"
+  verify_pvc_named "${ns}" "git-cache-main-node"
+  verify_pvc_named "${ns}" "git-cache-secondary-node"
+
+  verify_sts_volume_claim "${ns}" "main-node" "git-cache" "git-cache-main-node"
+  verify_sts_volume_claim "${ns}" "secondary-node" "git-cache" "git-cache-secondary-node"
+  verify_sts_container_mount_path "${ns}" "main-node" "git-cache" "/mnt/git-cache"
+
+  verify_sts_volume_source "${ns}" "main-node" "extra-config" "configMap.name" "teamcity-extra-config"
+  verify_sts_container_mount_path "${ns}" "main-node" "extra-config" "/mnt/extra-config"
+
+  verify_sts_volume_source "${ns}" "main-node" "git-key" "secret.secretName" "git-key"
+  verify_sts_container_mount_absent "${ns}" "main-node" "git-key"
+
+  verify_sts_volume_source "${ns}" "secondary-node" "nodeconfig" "configMap.name" "teamcity-node-config"
+  verify_sts_container_mount_path "${ns}" "secondary-node" "nodeconfig" "/mnt/nodeconfig"
+  verify_sts_volume_absent "${ns}" "main-node" "nodeconfig"
+
+  cleanup_namespace "${ns}"
+}
+
 # ========================== Main ============================================
 
 check_prerequisites
@@ -763,5 +882,6 @@ run_test test_with_zero_downtime_upgrade
 run_test test_with_secondary_node_zero_downtime
 run_test test_with_node_data_dir
 run_test test_with_node_data_dir_adopt
+run_test test_with_custom_mounts
 
 echo_success "All integration tests passed!"

@@ -29,6 +29,7 @@ func BuildRoNode(instance *TeamCity, name string) Node {
 		claim := *instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim
 		node.Spec.NodeDataDirVolumeClaim = &claim
 	}
+	node.Spec.PersistentVolumeClaims = append(node.Spec.PersistentVolumeClaims, instance.Spec.MainNode.Spec.PersistentVolumeClaims...)
 	return node
 }
 
@@ -62,9 +63,7 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	}
 	roStatefulSet.Spec.Template.Spec = *mainStatefulSet.Spec.Template.Spec.DeepCopy()
 	roStatefulSet.Spec.Template.Labels = labels
-	if node.Spec.NodeDataDirVolumeClaim != nil {
-		replaceNodeDataDirWithEmptyDir(&roStatefulSet.Spec.Template.Spec, node)
-	}
+	replacePerNodeClaimsWithEmptyDir(&roStatefulSet.Spec.Template.Spec, instance.NodePersistentVolumeClaimsFor(node))
 	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
 	roStatefulSet.Spec.Template.Spec.Containers[0].Env = envVars
 	if err := controllerutil.SetControllerReference(instance, roStatefulSet, scheme); err != nil {
@@ -73,19 +72,20 @@ func UpdateROStatefulSet(scheme *runtime.Scheme, instance *TeamCity,
 	return nil
 }
 
-func replaceNodeDataDirWithEmptyDir(podSpec *v12.PodSpec, node Node) {
-	volumeName := node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name
-	emptyDirVolume := createNodeDataDirEmptyDirVolume(node)
-	replaced := false
-	for i := range podSpec.Volumes {
-		if podSpec.Volumes[i].Name == volumeName {
-			podSpec.Volumes[i] = emptyDirVolume
-			replaced = true
-			break
+func replacePerNodeClaimsWithEmptyDir(podSpec *v12.PodSpec, claims []CustomPersistentVolumeClaim) {
+	for _, claim := range claims {
+		emptyDirVolume := createEmptyDirVolumeForClaim(claim)
+		replaced := false
+		for i := range podSpec.Volumes {
+			if podSpec.Volumes[i].Name == emptyDirVolume.Name {
+				podSpec.Volumes[i] = emptyDirVolume
+				replaced = true
+				break
+			}
 		}
-	}
-	if !replaced {
-		podSpec.Volumes = append(podSpec.Volumes, emptyDirVolume)
+		if !replaced {
+			podSpec.Volumes = append(podSpec.Volumes, emptyDirVolume)
+		}
 	}
 }
 

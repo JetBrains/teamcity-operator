@@ -36,6 +36,7 @@ type TeamCitySpec struct {
 	SecondaryNodes         []Node                        `json:"secondaryNodes,omitempty"`
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+	Volumes                []TeamCityVolume              `json:"volumes,omitempty"`
 
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
@@ -83,6 +84,8 @@ type NodeSpec struct {
 	Responsibilities []string `json:"responsibilities,omitempty"`
 
 	NodeDataDirVolumeClaim *CustomPersistentVolumeClaim `json:"nodeDataDirVolumeClaim,omitempty"`
+
+	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 }
 
 type Node struct {
@@ -108,6 +111,14 @@ type CustomPersistentVolumeClaim struct {
 	VolumeMount   v1.VolumeMount               `json:"volumeMount"`
 	Spec          v1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
 	ExistingClaim bool                         `json:"existingClaim,omitempty"`
+}
+
+type TeamCityVolume struct {
+	v1.Volume `json:",inline"`
+
+	Mount *v1.VolumeMount `json:"mount,omitempty"`
+
+	Nodes []string `json:"nodes,omitempty"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity
@@ -190,6 +201,45 @@ func (instance *TeamCity) NodeDataDirClaimNameFor(node Node) string {
 		return ""
 	}
 	return node.Spec.NodeDataDirVolumeClaim.Name
+}
+
+func (instance *TeamCity) NodePersistentVolumeClaimsFor(node Node) []CustomPersistentVolumeClaim {
+	var claims []CustomPersistentVolumeClaim
+	if node.Spec.NodeDataDirVolumeClaim != nil {
+		claims = append(claims, *node.Spec.NodeDataDirVolumeClaim)
+	}
+	claims = append(claims, node.Spec.PersistentVolumeClaims...)
+	return claims
+}
+
+func (instance *TeamCity) AllNodePersistentVolumeClaims() []CustomPersistentVolumeClaim {
+	var claims []CustomPersistentVolumeClaim
+	for _, node := range instance.GetAllNodes() {
+		claims = append(claims, instance.NodePersistentVolumeClaimsFor(node)...)
+	}
+	return claims
+}
+
+func (volume TeamCityVolume) AppliesToNode(nodeName string) bool {
+	if len(volume.Nodes) == 0 {
+		return true
+	}
+	for _, name := range volume.Nodes {
+		if name == nodeName {
+			return true
+		}
+	}
+	return false
+}
+
+func (instance *TeamCity) VolumesFor(node Node) []TeamCityVolume {
+	var volumes []TeamCityVolume
+	for _, volume := range instance.Spec.Volumes {
+		if volume.AppliesToNode(node.Name) {
+			volumes = append(volumes, volume)
+		}
+	}
+	return volumes
 }
 
 func (instance *TeamCity) ServiceAccountProvided() bool {

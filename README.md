@@ -69,6 +69,7 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_secondary_node.yaml` | Multi-node with responsibilities |
 | `_v1beta1_teamcity_with_node_data_dir.yaml` | Per-node data directory (`*.spec.nodeDataDirVolumeClaim`) |
 | `_v1beta1_teamcity_with_node_data_dir_adopt.yaml` | Adopt existing PVC via `existingClaim: true` |
+| `_v1beta1_teamcity_with_custom_mounts.yaml` | ConfigMap/Secret/CSI volumes (`spec.volumes`) and per-node PVCs |
 | `_v1beta1_teamcity_with_secondary_node_read_only.yaml` | Secondary node without responsibilities |
 | `_v1beta1_teamcity_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (single node) |
 | `_v1beta1_teamcity_with_secondary_node_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (multi-node) |
@@ -477,6 +478,66 @@ During experimental zero-downtime upgrades, the temporary read-only replica uses
 
 Full sample: `config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir.yaml`.
 
+### Custom volumes and mounts
+
+`spec.volumes[]` accepts any Kubernetes volume source — ConfigMap, Secret, CSI, `emptyDir`, a PVC you created yourself — and mounts it into the TeamCity container. Each entry is a standard pod volume plus two extra fields:
+
+| Field | Meaning |
+|---|---|
+| `mount` | A `volumeMount` for the TeamCity container. Omit it to define the volume without mounting it — useful when only an init container needs it. |
+| `nodes` | Node names this volume applies to. Omit it to apply to every node. |
+
+```yaml
+  volumes:
+    - name: database-secret
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: teamcity-database
+      mount:
+        mountPath: /mnt/database
+        readOnly: true
+    - name: git-key
+      secret:
+        secretName: git-key
+    - name: nodeconfig
+      configMap:
+        name: teamcity-node-config
+      nodes: ["secondary-node"]
+      mount:
+        mountPath: /mnt/nodeconfig
+```
+
+Above, `database-secret` is mounted on every node, `git-key` is available to init containers only, and `nodeconfig` exists on `secondary-node` alone. Init containers declared in `spec.*.spec.initContainers` reference these volumes by name in their own `volumeMounts`.
+
+Volume names and mount paths must not collide with the data directory, `spec.persistentVolumeClaims[]`, or any per-node claim on the same node. Two volumes may share a mount path only if their `nodes` lists do not overlap. `hostPath` sources are accepted but produce an admission warning, since their contents are tied to the Kubernetes node the pod lands on.
+
+### Per-node persistent volume claims
+
+`spec.persistentVolumeClaims[]` mounts the same PVC on every node. When each node needs its own volume — a git cache, for example — use `spec.mainNode.spec.persistentVolumeClaims[]` and `spec.secondaryNodes[].spec.persistentVolumeClaims[]` instead. Each node names its own claim, so nodes may differ in storage class and size while sharing a mount path:
+
+```yaml
+  mainNode:
+    name: main-node
+    spec:
+      persistentVolumeClaims:
+        - name: git-cache-main-node
+          volumeMount:
+            name: git-cache
+            mountPath: /mnt/git-cache
+          spec:
+            accessModes: [ReadWriteOnce]
+            storageClassName: gp3
+            resources:
+              requests:
+                storage: 20Gi
+```
+
+These behave like `nodeDataDirVolumeClaim`, minus the `-Dteamcity.node.data.path` property: the operator creates and owns the claim, or mounts a pre-existing one when `existingClaim: true` is set. They are labelled `teamcity.jetbrains.com/node-pvc` and are never deleted by the operator, so removing a node or a claim from the spec detaches the volume but leaves the data in place; delete such PVCs manually when you no longer need them. During experimental zero-downtime upgrades the read-only replica substitutes an `emptyDir` at the same path.
+
+Full sample for both features: `config/samples/v1beta1/_v1beta1_teamcity_with_custom_mounts.yaml`.
+
 ### Headless Service and per-node serviceName
 
 Set `spec.serviceList` with `clusterIP: None` and reference the service from each node via `spec.mainNode.spec.serviceName` (and/or `spec.secondaryNodes[].spec.serviceName`). This gives each StatefulSet pod a stable DNS name under the headless service.
@@ -628,6 +689,7 @@ The operator passes these through to child resources without modification:
 | `spec.dataDirVolumeClaim.annotations` | Data directory PVC |
 | `spec.*.nodeDataDirVolumeClaim.annotations` | Per-node data directory PVCs |
 | `spec.persistentVolumeClaims[].annotations` | Additional PVCs |
+| `spec.*.persistentVolumeClaims[].annotations` | Per-node PVCs |
 
 Use these for integration with other cluster components — for example, `cluster-autoscaler.kubernetes.io/safe-to-evict` on node annotations, NGINX Ingress proxy settings on `ingressList` entries, or `eks.amazonaws.com/role-arn` on `serviceAccount` (see the ServiceAccount example above).
 
@@ -650,8 +712,8 @@ When defining `spec.serviceList` selectors, use the standard labels the operator
 
 ## Limitations
 
-- Custom volume mounts beyond PVCs (ConfigMap, Secret, CSI) are not available; this feature is under development.
 - Ingress integration has been tested with the NGINX Ingress Controller only.
+- `existingClaim: true` is honoured for per-node claims only. On `spec.dataDirVolumeClaim` and `spec.persistentVolumeClaims[]` the operator still creates and owns the PVC.
 
 ## FAQ
 

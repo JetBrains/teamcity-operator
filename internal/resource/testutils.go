@@ -3,6 +3,7 @@ package resource
 import (
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -233,6 +234,91 @@ func getNodeDataDirClaim(name string) *CustomPersistentVolumeClaim {
 				},
 			},
 		},
+	}
+}
+
+func volumeNamesOf(statefulSet *appsv1.StatefulSet) []string {
+	var names []string
+	for _, volume := range statefulSet.Spec.Template.Spec.Volumes {
+		names = append(names, volume.Name)
+	}
+	return names
+}
+
+func mountByName(container corev1.Container, name string) *corev1.VolumeMount {
+	for i := range container.VolumeMounts {
+		if container.VolumeMounts[i].Name == name {
+			return &container.VolumeMounts[i]
+		}
+	}
+	return nil
+}
+
+func getNodePVC(name string, storageClass string) CustomPersistentVolumeClaim {
+	return CustomPersistentVolumeClaim{
+		Name: name,
+		VolumeMount: corev1.VolumeMount{
+			Name:      "git-cache",
+			MountPath: "/mnt/git-cache",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"},
+			StorageClassName: &storageClass,
+			VolumeMode:       &dataDirPVCVolumeMode,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+}
+
+func getConfigMapVolume() TeamCityVolume {
+	return TeamCityVolume{
+		Volume: corev1.Volume{
+			Name: "extra-config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "tc-extra-config"},
+				},
+			},
+		},
+		Mount: &corev1.VolumeMount{
+			MountPath: "/mnt/extra-config",
+			ReadOnly:  true,
+		},
+	}
+}
+
+func getUnmountedSecretVolume() TeamCityVolume {
+	return TeamCityVolume{
+		Volume: corev1.Volume{
+			Name: "git-key",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "git-key"},
+			},
+		},
+	}
+}
+
+func getNodeScopedCsiVolume(nodeNames ...string) TeamCityVolume {
+	return TeamCityVolume{
+		Volume: corev1.Volume{
+			Name: "database-secret",
+			VolumeSource: corev1.VolumeSource{
+				CSI: &corev1.CSIVolumeSource{
+					Driver:           "secrets-store.csi.k8s.io",
+					ReadOnly:         pointer.Bool(true),
+					VolumeAttributes: map[string]string{"secretProviderClass": "tc-database"},
+				},
+			},
+		},
+		Mount: &corev1.VolumeMount{
+			MountPath: "/mnt/database",
+			ReadOnly:  true,
+		},
+		Nodes: nodeNames,
 	}
 }
 
