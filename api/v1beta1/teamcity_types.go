@@ -37,10 +37,12 @@ type TeamCitySpec struct {
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 
-	// Volumes to attach to the TeamCity pods, using any Kubernetes volume source
+	// Volumes attached to every node, using any Kubernetes volume source
 	// (ConfigMap, Secret, CSI, emptyDir, an existing PersistentVolumeClaim, ...).
-	// Volume names must be unique and must not collide with the names used by
-	// dataDirVolumeClaim, persistentVolumeClaims or any per-node claim.
+	// To attach a volume to a single node, declare it under that node's
+	// spec.volumes instead. Volume names must be unique and must not collide with
+	// the names used by dataDirVolumeClaim, persistentVolumeClaims or any
+	// per-node claim.
 	Volumes []TeamCityVolume `json:"volumes,omitempty"`
 
 	// +kubebuilder:default:=95
@@ -96,6 +98,10 @@ type NodeSpec struct {
 	// claim unless existingClaim is true, and never deletes it: removing an entry
 	// detaches the volume but leaves the data in place.
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+
+	// Volumes attached to this node alone, using any Kubernetes volume source.
+	// Use teamcity.spec.volumes for volumes that every node should receive.
+	Volumes []TeamCityVolume `json:"volumes,omitempty"`
 }
 
 type Node struct {
@@ -133,10 +139,6 @@ type TeamCityVolume struct {
 	// useful when only an init container needs the volume; the init container
 	// then references it by name in its own volumeMounts.
 	Mount *v1.VolumeMount `json:"mount,omitempty"`
-
-	// Nodes limits this volume to the named nodes, matching mainNode.name or
-	// secondaryNodes[].name. Leave empty to attach the volume to every node.
-	Nodes []string `json:"nodes,omitempty"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity
@@ -238,25 +240,10 @@ func (instance *TeamCity) AllNodePersistentVolumeClaims() []CustomPersistentVolu
 	return claims
 }
 
-func (volume TeamCityVolume) AppliesToNode(nodeName string) bool {
-	if len(volume.Nodes) == 0 {
-		return true
-	}
-	for _, name := range volume.Nodes {
-		if name == nodeName {
-			return true
-		}
-	}
-	return false
-}
-
 func (instance *TeamCity) VolumesFor(node Node) []TeamCityVolume {
 	var volumes []TeamCityVolume
-	for _, volume := range instance.Spec.Volumes {
-		if volume.AppliesToNode(node.Name) {
-			volumes = append(volumes, volume)
-		}
-	}
+	volumes = append(volumes, instance.Spec.Volumes...)
+	volumes = append(volumes, node.Spec.Volumes...)
 	return volumes
 }
 

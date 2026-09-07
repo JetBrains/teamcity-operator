@@ -69,7 +69,7 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_secondary_node.yaml` | Multi-node with responsibilities |
 | `_v1beta1_teamcity_with_node_data_dir.yaml` | Per-node data directory (`*.spec.nodeDataDirVolumeClaim`) |
 | `_v1beta1_teamcity_with_node_data_dir_adopt.yaml` | Adopt existing PVC via `existingClaim: true` |
-| `_v1beta1_teamcity_with_custom_mounts.yaml` | ConfigMap/Secret volumes (`spec.volumes`) and per-node PVCs |
+| `_v1beta1_teamcity_with_custom_mounts.yaml` | ConfigMap/Secret volumes (`spec.volumes`, `nodeSpec.volumes`) and per-node PVCs |
 | `_v1beta1_teamcity_with_node_volume_claims_adopt.yaml` | Adopt an existing per-node PVC via `existingClaim: true` |
 | `_v1beta1_teamcity_with_secondary_node_read_only.yaml` | Secondary node without responsibilities |
 | `_v1beta1_teamcity_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (single node) |
@@ -481,14 +481,20 @@ Full sample: `config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir.yaml`.
 
 ### Custom volumes and mounts
 
-`spec.volumes[]` accepts any Kubernetes volume source — ConfigMap, Secret, CSI, `emptyDir`, a PVC you created yourself — and mounts it into the TeamCity container. Each entry is a standard pod volume plus two extra fields:
+`volumes[]` accepts any Kubernetes volume source — ConfigMap, Secret, CSI, `emptyDir`, a PVC you created yourself — and mounts it into the TeamCity container. Each entry is a standard pod volume plus one extra field, `mount`, which supplies the `volumeMount` for the TeamCity container. Omit `mount` to define the volume without mounting it, which is useful when only an init container needs it.
 
-| Field | Meaning |
+Declare the volume at the level that matches its scope:
+
+| Field | Applies to |
 |---|---|
-| `mount` | A `volumeMount` for the TeamCity container. Omit it to define the volume without mounting it — useful when only an init container needs it. |
-| `nodes` | Node names this volume applies to. Omit it to apply to every node. |
+| `spec.volumes[]` | every node |
+| `spec.mainNode.spec.volumes[]` | the main node only |
+| `spec.secondaryNodes[].spec.volumes[]` | that secondary node only |
+
+This mirrors `dataDirVolumeClaim` / `nodeDataDirVolumeClaim`: spec level means shared, node level means that node alone.
 
 ```yaml
+spec:
   volumes:
     - name: database-secret
       csi:
@@ -502,21 +508,24 @@ Full sample: `config/samples/v1beta1/_v1beta1_teamcity_with_node_data_dir.yaml`.
     - name: git-key
       secret:
         secretName: git-key
-    - name: nodeconfig
-      configMap:
-        name: teamcity-node-config
-      nodes: ["secondary-node"]
-      mount:
-        mountPath: /mnt/nodeconfig
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        volumes:
+          - name: nodeconfig
+            configMap:
+              name: teamcity-node-config
+            mount:
+              mountPath: /mnt/nodeconfig
 ```
 
 Above, `database-secret` is mounted on every node, `git-key` is available to init containers only, and `nodeconfig` exists on `secondary-node` alone. Init containers declared in `spec.*.spec.initContainers` reference these volumes by name in their own `volumeMounts`.
 
-Volume names and mount paths must not collide with the data directory, `spec.persistentVolumeClaims[]`, or any per-node claim on the same node. Two volumes may share a mount path only if their `nodes` lists do not overlap. `hostPath` sources are accepted but produce an admission warning, since their contents are tied to the Kubernetes node the pod lands on.
+A node receives `spec.volumes[]` plus its own `spec.volumes[]`. Within that merged set, names and mount paths must be unique, and must not collide with the data directory, `spec.persistentVolumeClaims[]`, or any per-node claim. Two nodes may reuse the same volume name or mount path, since they never share a pod. `hostPath` sources are accepted but produce an admission warning, since their contents are tied to the Kubernetes node the pod lands on.
 
 ### Per-node persistent volume claims
 
-`spec.persistentVolumeClaims[]` mounts the same PVC on every node. When each node needs its own volume — a git cache, for example — use `spec.mainNode.spec.persistentVolumeClaims[]` and `spec.secondaryNodes[].spec.persistentVolumeClaims[]` instead. Each node names its own claim, so nodes may differ in storage class and size while sharing a mount path:
+`spec.persistentVolumeClaims[]` mounts the same PVC on every node, which only works for `ReadWriteMany` storage. When each node needs its own volume — a `ReadWriteOnce` git cache, for example — use `spec.mainNode.spec.persistentVolumeClaims[]` and `spec.secondaryNodes[].spec.persistentVolumeClaims[]` instead. Each node names its own claim, so nodes may differ in storage class and size while sharing a mount path:
 
 ```yaml
   mainNode:

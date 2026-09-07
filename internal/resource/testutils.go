@@ -302,7 +302,7 @@ func getUnmountedSecretVolume() TeamCityVolume {
 	}
 }
 
-func getNodeScopedCsiVolume(nodeNames ...string) TeamCityVolume {
+func getCsiVolume() TeamCityVolume {
 	return TeamCityVolume{
 		Volume: corev1.Volume{
 			Name: "database-secret",
@@ -318,7 +318,6 @@ func getNodeScopedCsiVolume(nodeNames ...string) TeamCityVolume {
 			MountPath: "/mnt/database",
 			ReadOnly:  true,
 		},
-		Nodes: nodeNames,
 	}
 }
 

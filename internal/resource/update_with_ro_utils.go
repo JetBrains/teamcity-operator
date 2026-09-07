@@ -30,6 +30,7 @@ func BuildRoNode(instance *TeamCity, name string) Node {
 		node.Spec.NodeDataDirVolumeClaim = &claim
 	}
 	node.Spec.PersistentVolumeClaims = append(node.Spec.PersistentVolumeClaims, instance.Spec.MainNode.Spec.PersistentVolumeClaims...)
+	node.Spec.Volumes = append(node.Spec.Volumes, instance.Spec.MainNode.Spec.Volumes...)
 	return node
 }
 

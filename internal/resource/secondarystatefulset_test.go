@@ -129,8 +129,8 @@ var _ = Describe("Secondary StatefulSet", func() {
 				Expect(dataDirVolumeMount.MountPath).To(Equal(dataDirPVC.VolumeMount.MountPath))
 			}
 		})
-		It("mounts a volume scoped to this node", func() {
-			Instance.Spec.Volumes = []TeamCityVolume{getNodeScopedCsiVolume(Instance.Spec.SecondaryNodes[0].Name)}
+		It("mounts a volume declared on this node", func() {
+			Instance.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{getCsiVolume()}
 			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(DefaultSecondaryStatefulSetBuilder.Update(objectList[0])).To(Succeed())

@@ -396,8 +396,8 @@ var _ = Describe("StatefulSet", func() {
 				teamcity.Spec.Volumes = []TeamCityVolume{
 					getConfigMapVolume(),
 					getUnmountedSecretVolume(),
-					getNodeScopedCsiVolume("secondary-node"),
 				}
+				teamcity.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{getCsiVolume()}
 			})
 		})
 		It("mounts volumes that target all nodes and preserves the mount options", func() {
@@ -426,7 +426,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(volumeNamesOf(statefulSet)).To(ContainElement("git-key"))
 			Expect(mountByName(statefulSet.Spec.Template.Spec.Containers[0], "git-key")).To(BeNil())
 		})
-		It("skips volumes scoped to another node", func() {
+		It("skips volumes declared on another node", func() {
 			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
 			stsObject := obj[0]

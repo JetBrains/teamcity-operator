@@ -31,12 +31,6 @@ spec:
     - name: git-key
       secret:
         secretName: git-key
-    - name: nodeconfig
-      configMap:
-        name: teamcity-node-config
-      nodes: ["secondary-node"]
-      mount:
-        mountPath: /mnt/nodeconfig
   mainNode:
     name: main-node
     spec:
@@ -72,6 +66,12 @@ spec:
           cpu: "1000m"
           memory: "2500Mi"
         responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]
+        volumes:
+          - name: nodeconfig
+            configMap:
+              name: teamcity-node-config
+            mount:
+              mountPath: /mnt/nodeconfig
         persistentVolumeClaims:
           - name: git-cache-secondary-node
             volumeMount:

@@ -52,23 +52,49 @@ func TestValidateVolumesRejectsDuplicateNames(t *testing.T) {
 	assert.Contains(t, err.Error(), "collides with")
 }
 
-func TestValidateVolumesRejectsUnknownNodeName(t *testing.T) {
+func TestValidateVolumesAcceptsNodeLevelVolume(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	volume := configMapVolumeForWebhookTest("extra-config", "/mnt/extra-config")
-	volume.Nodes = []string{"does-not-exist"}
-	tc.Spec.Volumes = []TeamCityVolume{volume}
-	_, err := tc.ValidateCreate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not match any node")
-}
-
-func TestValidateVolumesAcceptsKnownNodeName(t *testing.T) {
-	tc := validTeamCityForWebhookTest()
-	volume := configMapVolumeForWebhookTest("extra-config", "/mnt/extra-config")
-	volume.Nodes = []string{tc.Spec.MainNode.Name}
-	tc.Spec.Volumes = []TeamCityVolume{volume}
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("extra-config", "/mnt/extra-config"),
+	}
 	_, err := tc.ValidateCreate()
 	require.NoError(t, err)
+}
+
+func TestValidateVolumesRejectsNodeLevelEmptyName(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("", "/mnt/extra-config"),
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Volume name is not set")
+}
+
+func TestValidateVolumesRejectsNodeLevelShadowingSpecLevel(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("extra-config", "/mnt/extra-config"),
+	}
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("extra-config", "/mnt/other"),
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "collides with")
+}
+
+func TestValidateVolumesRejectsNodeLevelMountPathClashWithSpecLevel(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("extra-config", "/mnt/shared"),
+	}
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("node-config", "/mnt/shared"),
+	}
+	_, err := tc.ValidateCreate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mount.mountPath")
 }
 
 func TestValidateVolumesRejectsMountPathCollisionWithDataDir(t *testing.T) {
@@ -95,12 +121,26 @@ func TestValidateVolumesAllowsSameMountPathOnDifferentNodes(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
 	tc.Spec.SecondaryNodes = []Node{secondaryNodeForWebhookTest("secondary")}
 
-	mainOnly := configMapVolumeForWebhookTest("config-main", "/mnt/nodeconfig")
-	mainOnly.Nodes = []string{tc.Spec.MainNode.Name}
-	secondaryOnly := configMapVolumeForWebhookTest("config-secondary", "/mnt/nodeconfig")
-	secondaryOnly.Nodes = []string{"secondary"}
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("config-main", "/mnt/nodeconfig"),
+	}
+	tc.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("config-secondary", "/mnt/nodeconfig"),
+	}
+	_, err := tc.ValidateCreate()
+	require.NoError(t, err)
+}
 
-	tc.Spec.Volumes = []TeamCityVolume{mainOnly, secondaryOnly}
+func TestValidateVolumesAllowsSameVolumeNameOnDifferentNodes(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.SecondaryNodes = []Node{secondaryNodeForWebhookTest("secondary")}
+
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("nodeconfig", "/mnt/nodeconfig"),
+	}
+	tc.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("nodeconfig", "/mnt/nodeconfig"),
+	}
 	_, err := tc.ValidateCreate()
 	require.NoError(t, err)
 }
