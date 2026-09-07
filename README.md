@@ -69,7 +69,8 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_secondary_node.yaml` | Multi-node with responsibilities |
 | `_v1beta1_teamcity_with_node_data_dir.yaml` | Per-node data directory (`*.spec.nodeDataDirVolumeClaim`) |
 | `_v1beta1_teamcity_with_node_data_dir_adopt.yaml` | Adopt existing PVC via `existingClaim: true` |
-| `_v1beta1_teamcity_with_custom_mounts.yaml` | ConfigMap/Secret/CSI volumes (`spec.volumes`) and per-node PVCs |
+| `_v1beta1_teamcity_with_custom_mounts.yaml` | ConfigMap/Secret volumes (`spec.volumes`) and per-node PVCs |
+| `_v1beta1_teamcity_with_node_volume_claims_adopt.yaml` | Adopt an existing per-node PVC via `existingClaim: true` |
 | `_v1beta1_teamcity_with_secondary_node_read_only.yaml` | Secondary node without responsibilities |
 | `_v1beta1_teamcity_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (single node) |
 | `_v1beta1_teamcity_with_secondary_node_with_zero_downtime_upgrade.yaml` | Zero-downtime upgrade (multi-node) |
@@ -534,9 +535,20 @@ Volume names and mount paths must not collide with the data directory, `spec.per
                 storage: 20Gi
 ```
 
-These behave like `nodeDataDirVolumeClaim`, minus the `-Dteamcity.node.data.path` property: the operator creates and owns the claim, or mounts a pre-existing one when `existingClaim: true` is set. They are labelled `teamcity.jetbrains.com/node-pvc` and are never deleted by the operator, so removing a node or a claim from the spec detaches the volume but leaves the data in place; delete such PVCs manually when you no longer need them. During experimental zero-downtime upgrades the read-only replica substitutes an `emptyDir` at the same path.
+These behave like `nodeDataDirVolumeClaim`, minus the `-Dteamcity.node.data.path` property. Omit `existingClaim` and provide `spec`, as above, to have the operator create and own the claim. To mount a volume that already exists — migrating from Helm, for example — set `existingClaim: true` and drop `spec`; the operator mounts the named PVC without creating it or taking ownership:
 
-Full sample for both features: `config/samples/v1beta1/_v1beta1_teamcity_with_custom_mounts.yaml`.
+```yaml
+      persistentVolumeClaims:
+        - name: existing-git-cache
+          existingClaim: true
+          volumeMount:
+            name: git-cache
+            mountPath: /mnt/git-cache
+```
+
+Per-node claims are labelled `teamcity.jetbrains.com/node-pvc` and are never deleted by the operator, so removing a node or a claim from the spec detaches the volume but leaves the data in place; delete such PVCs manually when you no longer need them. During experimental zero-downtime upgrades the read-only replica substitutes an `emptyDir` at the same path.
+
+Samples: `config/samples/v1beta1/_v1beta1_teamcity_with_custom_mounts.yaml` and `config/samples/v1beta1/_v1beta1_teamcity_with_node_volume_claims_adopt.yaml`.
 
 ### Headless Service and per-node serviceName
 

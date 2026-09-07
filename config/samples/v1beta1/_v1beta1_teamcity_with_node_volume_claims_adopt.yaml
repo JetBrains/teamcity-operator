@@ -1,0 +1,45 @@
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-node-volume-claims-adopt
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /data/teamcity_server
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      persistentVolumeClaims:
+        - name: existing-git-cache
+          existingClaim: true
+          volumeMount:
+            name: git-cache
+            mountPath: /mnt/git-cache
+        - name: build-logs-main-node
+          volumeMount:
+            name: build-logs
+            mountPath: /mnt/build-logs
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi

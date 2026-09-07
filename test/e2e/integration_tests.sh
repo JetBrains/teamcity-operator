@@ -851,6 +851,30 @@ test_with_custom_mounts() {
   cleanup_namespace "${ns}"
 }
 
+# --- 17. TeamCity adopting an existing per-node PVC ------------------------
+test_with_node_volume_claims_adopt() {
+  local ns="test-node-volume-claims-adopt"
+  local existing_claim="existing-git-cache"
+  create_namespace "${ns}"
+
+  create_existing_node_data_pvc "${ns}" "${existing_claim}"
+  apply_sample "${samplesdir}/_v1beta1_teamcity_with_node_volume_claims_adopt.yaml" "${ns}"
+  wait_for_statefulsets "${ns}" 1
+
+  verify_resource_exists "${ns}" statefulset 1
+  verify_resource_exists "${ns}" pvc 3
+
+  verify_pvc_named "${ns}" "teamcity-data-dir"
+  verify_pvc_named "${ns}" "${existing_claim}"
+  verify_pvc_named "${ns}" "build-logs-main-node"
+
+  verify_sts_volume_claim "${ns}" "main-node" "git-cache" "${existing_claim}"
+  verify_sts_volume_claim "${ns}" "main-node" "build-logs" "build-logs-main-node"
+  verify_sts_container_mount_path "${ns}" "main-node" "git-cache" "/mnt/git-cache"
+
+  cleanup_namespace "${ns}"
+}
+
 # ========================== Main ============================================
 
 check_prerequisites
@@ -883,5 +907,6 @@ run_test test_with_secondary_node_zero_downtime
 run_test test_with_node_data_dir
 run_test test_with_node_data_dir_adopt
 run_test test_with_custom_mounts
+run_test test_with_node_volume_claims_adopt
 
 echo_success "All integration tests passed!"
