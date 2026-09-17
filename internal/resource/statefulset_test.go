@@ -151,7 +151,8 @@ var _ = Describe("StatefulSet", func() {
 			Expect(len(statefulSet.Spec.Template.Spec.Volumes)).To(Equal(1))
 
 			dataDirVolume := statefulSet.Spec.Template.Spec.Volumes[0]
-			Expect(dataDirVolume.Name).To(Equal(dataDirPVC.Name))
+			Expect(dataDirVolume.Name).To(Equal(dataDirPVC.VolumeMount.Name))
+			Expect(dataDirVolume.PersistentVolumeClaim.ClaimName).To(Equal(dataDirPVC.Name))
 
 			teamcityContainer := statefulSet.Spec.Template.Spec.Containers[0]
 			Expect(len(teamcityContainer.VolumeMounts)).To(Equal(1))
@@ -386,6 +387,125 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSet.Spec.Template.Spec.Volumes[1].PersistentVolumeClaim.ClaimName).To(Equal("existing-main-claim"))
 			serverOptsEnvVarIndex := slices.IndexFunc(statefulSet.Spec.Template.Spec.Containers[0].Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Env[serverOptsEnvVarIndex].Value).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
+		})
+	})
+	Context("TeamCity with custom volumes", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = []Node{getSecondaryNode()}
+				teamcity.Spec.Volumes = []TeamCityVolume{
+					getConfigMapVolume(),
+					getUnmountedSecretVolume(),
+				}
+				teamcity.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{getCsiVolume()}
+			})
+		})
+		It("mounts volumes that target all nodes and preserves the mount options", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			Expect(DefaultStatefulSetBuilder.Update(stsObject)).To(Succeed())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			volumeNames := volumeNamesOf(statefulSet)
+			Expect(volumeNames).To(ContainElement("extra-config"))
+
+			container := statefulSet.Spec.Template.Spec.Containers[0]
+			mount := mountByName(container, "extra-config")
+			Expect(mount).NotTo(BeNil())
+			Expect(mount.MountPath).To(Equal("/mnt/extra-config"))
+			Expect(mount.ReadOnly).To(BeTrue())
+		})
+		It("defines a volume without mounting it when mount is omitted", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			Expect(DefaultStatefulSetBuilder.Update(stsObject)).To(Succeed())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			Expect(volumeNamesOf(statefulSet)).To(ContainElement("git-key"))
+			Expect(mountByName(statefulSet.Spec.Template.Spec.Containers[0], "git-key")).To(BeNil())
+		})
+		It("skips volumes declared on another node", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			Expect(DefaultStatefulSetBuilder.Update(stsObject)).To(Succeed())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			Expect(volumeNamesOf(statefulSet)).NotTo(ContainElement("database-secret"))
+			Expect(mountByName(statefulSet.Spec.Template.Spec.Containers[0], "database-secret")).To(BeNil())
+		})
+	})
+	Context("TeamCity with a different ConfigMap per node", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = []Node{getSecondaryNode()}
+				teamcity.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+					getNamedConfigMapVolume("nodeconfig", "tc-config-main", "/mnt/nodeconfig"),
+				}
+				teamcity.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+					getNamedConfigMapVolume("nodeconfig", "tc-config-secondary", "/mnt/nodeconfig"),
+				}
+			})
+		})
+		It("gives each node its own ConfigMap behind a shared volume name and path", func() {
+			mainObj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultStatefulSetBuilder.Update(mainObj[0])).To(Succeed())
+			mainSts := mainObj[0].(*v1.StatefulSet)
+
+			secondaryObj, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultSecondaryStatefulSetBuilder.Update(secondaryObj[0])).To(Succeed())
+			secondarySts := secondaryObj[0].(*v1.StatefulSet)
+
+			Expect(configMapNameOf(mainSts, "nodeconfig")).To(Equal("tc-config-main"))
+			Expect(configMapNameOf(secondarySts, "nodeconfig")).To(Equal("tc-config-secondary"))
+
+			Expect(mountByName(mainSts.Spec.Template.Spec.Containers[0], "nodeconfig").MountPath).
+				To(Equal("/mnt/nodeconfig"))
+			Expect(mountByName(secondarySts.Spec.Template.Spec.Containers[0], "nodeconfig").MountPath).
+				To(Equal("/mnt/nodeconfig"))
+		})
+	})
+	Context("TeamCity with per-node persistent volume claims", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.MainNode.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{
+					getNodePVC("git-cache-main-node", "gp3"),
+				}
+			})
+		})
+		It("mounts the node's own claim", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			Expect(DefaultStatefulSetBuilder.Update(stsObject)).To(Succeed())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			var gitCacheVolume *v12.Volume
+			for i := range statefulSet.Spec.Template.Spec.Volumes {
+				if statefulSet.Spec.Template.Spec.Volumes[i].Name == "git-cache" {
+					gitCacheVolume = &statefulSet.Spec.Template.Spec.Volumes[i]
+				}
+			}
+			Expect(gitCacheVolume).NotTo(BeNil())
+			Expect(gitCacheVolume.PersistentVolumeClaim.ClaimName).To(Equal("git-cache-main-node"))
+
+			mount := mountByName(statefulSet.Spec.Template.Spec.Containers[0], "git-cache")
+			Expect(mount).NotTo(BeNil())
+			Expect(mount.MountPath).To(Equal("/mnt/git-cache"))
+		})
+		It("does not set the node data path property", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			Expect(DefaultStatefulSetBuilder.Update(stsObject)).To(Succeed())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			container := statefulSet.Spec.Template.Spec.Containers[0]
+			serverOptsEnvVarIndex := slices.IndexFunc(container.Env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_SERVER_OPTS" })
+			Expect(container.Env[serverOptsEnvVarIndex].Value).NotTo(ContainSubstring("teamcity.node.data.path"))
 		})
 	})
 	Context("TeamCity without node data dir remains unchanged", func() {

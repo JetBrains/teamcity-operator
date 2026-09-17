@@ -1,0 +1,85 @@
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-custom-mounts
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  startupPropertiesConfig:
+    teamcity.startup.maintenance: "false"
+    teamcity.firstStart.setupAdmin.enabled: "false"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /data/teamcity_server
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  volumes:
+    - name: extra-config
+      configMap:
+        name: teamcity-extra-config
+      mount:
+        mountPath: /mnt/extra-config
+        readOnly: true
+    - name: git-key
+      secret:
+        secretName: git-key
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "1000m"
+        memory: "2500Mi"
+      responsibilities: ["MAIN_NODE", "CAN_PROCESS_USER_DATA_MODIFICATION_REQUESTS"]
+      initContainers:
+        - name: git-clone
+          image: busybox:1.36
+          command: ["sh", "-c", "test -f /mnt/git-key/id_rsa && mkdir -p /mnt/git-cache/settings"]
+          volumeMounts:
+            - name: git-key
+              mountPath: /mnt/git-key
+              readOnly: true
+            - name: git-cache
+              mountPath: /mnt/git-cache
+      persistentVolumeClaims:
+        - name: git-cache-main-node
+          volumeMount:
+            name: git-cache
+            mountPath: /mnt/git-cache
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 2Gi
+  secondaryNodes:
+    - name: secondary-node
+      spec:
+        requests:
+          cpu: "1000m"
+          memory: "2500Mi"
+        responsibilities: ["CAN_PROCESS_BUILD_MESSAGES", "CAN_CHECK_FOR_CHANGES", "CAN_PROCESS_BUILD_TRIGGERS"]
+        volumes:
+          - name: nodeconfig
+            configMap:
+              name: teamcity-node-config
+            mount:
+              mountPath: /mnt/nodeconfig
+        persistentVolumeClaims:
+          - name: git-cache-secondary-node
+            volumeMount:
+              name: git-cache
+              mountPath: /mnt/git-cache
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 1Gi

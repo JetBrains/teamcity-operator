@@ -153,7 +153,7 @@ func BuildVolumesFromPersistentVolumeClaims(persistentVolumeClaims []CustomPersi
 }
 
 func createVolumeFromCustomPersistentVolumeClaim(persistentVolumeClaim CustomPersistentVolumeClaim) v12.Volume {
-	return v12.Volume{Name: persistentVolumeClaim.Name,
+	return v12.Volume{Name: persistentVolumeClaim.VolumeMount.Name,
 		VolumeSource: v12.VolumeSource{
 			PersistentVolumeClaim: &v12.PersistentVolumeClaimVolumeSource{
 				ClaimName: persistentVolumeClaim.Name},
@@ -170,7 +170,26 @@ func BuildVolumeMountsFromPersistentVolumeClaims(persistentVolumeClaims []Custom
 }
 
 func createVolumeMountFromCustomPersistentVolumeClaim(persistentVolumeClaim CustomPersistentVolumeClaim) v12.VolumeMount {
-	return v12.VolumeMount{Name: persistentVolumeClaim.VolumeMount.Name, MountPath: persistentVolumeClaim.VolumeMount.MountPath}
+	return *persistentVolumeClaim.VolumeMount.DeepCopy()
+}
+
+func BuildVolumesFromTeamCityVolumes(volumes []TeamCityVolume) (result []v12.Volume) {
+	for _, volume := range volumes {
+		result = append(result, *volume.Volume.DeepCopy())
+	}
+	return
+}
+
+func BuildVolumeMountsFromTeamCityVolumes(volumes []TeamCityVolume) (result []v12.VolumeMount) {
+	for _, volume := range volumes {
+		if volume.Mount == nil {
+			continue
+		}
+		mount := *volume.Mount.DeepCopy()
+		mount.Name = volume.Name
+		result = append(result, mount)
+	}
+	return
 }
 
 func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container) {
@@ -189,11 +208,9 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.LivenessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
 	container.ReadinessProbe.ProbeHandler.HTTPGet = &instance.Spec.ReadinessEndpoint
 	container.StartupProbe.ProbeHandler.HTTPGet = &instance.Spec.HealthEndpoint
-	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
-	volumeMounts := BuildVolumeMountsFromPersistentVolumeClaims(allPersistentVolumeClaims)
-	if instance.NodeDataDirEnabledFor(node) {
-		volumeMounts = append(volumeMounts, createNodeDataDirVolumeMount(node))
-	}
+	volumeMounts := BuildVolumeMountsFromPersistentVolumeClaims(instance.GetAllCustomPersistentVolumeClaim())
+	volumeMounts = append(volumeMounts, BuildVolumeMountsFromPersistentVolumeClaims(instance.NodePersistentVolumeClaimsFor(node))...)
+	volumeMounts = append(volumeMounts, BuildVolumeMountsFromTeamCityVolumes(instance.VolumesFor(node))...)
 	container.VolumeMounts = volumeMounts
 	envVars := BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance, node)
 	container.Env = envVars
@@ -201,11 +218,9 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 }
 
 func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet) {
-	allPersistentVolumeClaims := instance.GetAllCustomPersistentVolumeClaim()
-	volumes := BuildVolumesFromPersistentVolumeClaims(allPersistentVolumeClaims)
-	if instance.NodeDataDirEnabledFor(node) {
-		volumes = append(volumes, createNodeDataDirVolume(node))
-	}
+	volumes := BuildVolumesFromPersistentVolumeClaims(instance.GetAllCustomPersistentVolumeClaim())
+	volumes = append(volumes, BuildVolumesFromPersistentVolumeClaims(instance.NodePersistentVolumeClaimsFor(node))...)
+	volumes = append(volumes, BuildVolumesFromTeamCityVolumes(instance.VolumesFor(node))...)
 	current.Spec.Replicas = pointer.Int32(1)
 	current.Spec.Template.Annotations = node.Annotations
 	current.Spec.Template.Spec.Volumes = volumes
@@ -220,27 +235,9 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	}
 }
 
-func createNodeDataDirVolumeMount(node Node) v12.VolumeMount {
-	return v12.VolumeMount{
-		Name:      node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
-		MountPath: node.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath,
-	}
-}
-
-func createNodeDataDirVolume(node Node) v12.Volume {
+func createEmptyDirVolumeForClaim(claim CustomPersistentVolumeClaim) v12.Volume {
 	return v12.Volume{
-		Name: node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
-		VolumeSource: v12.VolumeSource{
-			PersistentVolumeClaim: &v12.PersistentVolumeClaimVolumeSource{
-				ClaimName: node.Spec.NodeDataDirVolumeClaim.Name,
-			},
-		},
-	}
-}
-
-func createNodeDataDirEmptyDirVolume(node Node) v12.Volume {
-	return v12.Volume{
-		Name: node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name,
+		Name: claim.VolumeMount.Name,
 		VolumeSource: v12.VolumeSource{
 			EmptyDir: &v12.EmptyDirVolumeSource{},
 		},

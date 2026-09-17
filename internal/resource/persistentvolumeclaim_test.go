@@ -150,7 +150,64 @@ var _ = Describe("PersistentVolumeClaim", func() {
 			}
 			Expect(nodeDataObj).NotTo(BeNil())
 			Expect(DefaultPersistentVolumeClaimBuilder.Update(nodeDataObj)).To(Succeed())
-			Expect(nodeDataObj.GetLabels()["teamcity.jetbrains.com/node-data-dir"]).To(Equal("true"))
+			Expect(nodeDataObj.GetLabels()["teamcity.jetbrains.com/node-pvc"]).To(Equal("true"))
+		})
+	})
+
+	Context("per-node persistent volume claims", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = []Node{getSecondaryNode()}
+				teamcity.Spec.MainNode.Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{
+					getNodePVC("git-cache-main-node", "gp3"),
+				}
+				teamcity.Spec.SecondaryNodes[0].Spec.PersistentVolumeClaims = []CustomPersistentVolumeClaim{
+					getNodePVC("git-cache-secondary-node", "io2"),
+				}
+				DefaultClient = &pvcK8sClientMockWithNodeData{}
+			})
+		})
+		It("creates one claim per node and labels them", func() {
+			objList, err := DefaultPersistentVolumeClaimBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+
+			var names []string
+			for _, obj := range objList {
+				names = append(names, obj.GetName())
+			}
+			Expect(names).To(ContainElements("git-cache-main-node", "git-cache-secondary-node"))
+
+			for _, obj := range objList {
+				if obj.GetName() != "git-cache-main-node" {
+					continue
+				}
+				Expect(DefaultPersistentVolumeClaimBuilder.Update(obj)).To(Succeed())
+				Expect(obj.GetLabels()["teamcity.jetbrains.com/node-pvc"]).To(Equal("true"))
+				claim := obj.(*v12.PersistentVolumeClaim)
+				Expect(*claim.Spec.StorageClassName).To(Equal("gp3"))
+			}
+		})
+		It("does not create claims marked as existing", func() {
+			Instance.Spec.MainNode.Spec.PersistentVolumeClaims[0].ExistingClaim = true
+			objList, err := DefaultPersistentVolumeClaimBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+
+			var names []string
+			for _, obj := range objList {
+				names = append(names, obj.GetName())
+			}
+			Expect(names).NotTo(ContainElement("git-cache-main-node"))
+			Expect(names).To(ContainElement("git-cache-secondary-node"))
+		})
+		It("never marks per-node claims obsolete", func() {
+			Instance.Spec.MainNode.Spec.PersistentVolumeClaims = nil
+			Instance.Spec.SecondaryNodes[0].Spec.PersistentVolumeClaims = nil
+
+			obsoleteObjects, err := DefaultPersistentVolumeClaimBuilder.GetObsoleteObjects(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			for _, obj := range obsoleteObjects {
+				Expect(obj.GetName()).NotTo(HavePrefix("git-cache-"))
+			}
 		})
 	})
 })

@@ -161,6 +161,69 @@ var _ = Describe("UpdateWithROUtils", func() {
 			}
 			Expect(serverOpts).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
 		})
+		It("replaces every per-node claim with emptyDir", func() {
+			scheme := runtime.NewScheme()
+			Expect(AddToScheme(scheme)).To(Succeed())
+
+			instance := &TeamCity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-tc",
+					Namespace: "test-namespace",
+					UID:       "uid-1",
+				},
+				Spec: TeamCitySpec{
+					Image:         "jetbrains/teamcity-server:latest",
+					XmxPercentage: 95,
+					DataDirVolumeClaim: CustomPersistentVolumeClaim{
+						Name: "data-dir",
+						VolumeMount: v12.VolumeMount{
+							Name:      "data",
+							MountPath: "/data/teamcity",
+						},
+					},
+					MainNode: Node{
+						Name: "main-node",
+						Spec: NodeSpec{
+							Requests: v12.ResourceList{
+								"cpu":    resource.MustParse("500m"),
+								"memory": resource.MustParse("1Gi"),
+							},
+							PersistentVolumeClaims: []CustomPersistentVolumeClaim{
+								{
+									Name: "git-cache-main-node",
+									VolumeMount: v12.VolumeMount{
+										Name:      "git-cache",
+										MountPath: "/mnt/git-cache",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			main := &v1.StatefulSet{}
+			ConfigureStatefulSet(instance, instance.Spec.MainNode, main)
+			var container v12.Container
+			ConfigureContainer(instance, instance.Spec.MainNode, &container)
+			main.Spec.Template.Spec.Containers = []v12.Container{container}
+
+			ro := BuildROStatefulSet(instance)
+			Expect(UpdateROStatefulSet(scheme, instance, main, ro)).To(Succeed())
+
+			var gitCacheVolume *v12.Volume
+			for i := range ro.Spec.Template.Spec.Volumes {
+				if ro.Spec.Template.Spec.Volumes[i].Name == "git-cache" {
+					gitCacheVolume = &ro.Spec.Template.Spec.Volumes[i]
+					break
+				}
+			}
+			Expect(gitCacheVolume).NotTo(BeNil())
+			Expect(gitCacheVolume.EmptyDir).NotTo(BeNil())
+			Expect(gitCacheVolume.PersistentVolumeClaim).To(BeNil())
+
+			Expect(main.Spec.Template.Spec.Volumes[1].PersistentVolumeClaim.ClaimName).To(Equal("git-cache-main-node"))
+		})
 	})
 
 	Context("ChangesRequireNodeStatefulSetRestart", func() {

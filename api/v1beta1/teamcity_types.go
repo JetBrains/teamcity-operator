@@ -37,6 +37,14 @@ type TeamCitySpec struct {
 	DataDirVolumeClaim     CustomPersistentVolumeClaim   `json:"dataDirVolumeClaim"` //mandatory, since we rely on data dir persistence
 	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
 
+	// Volumes attached to every node, using any Kubernetes volume source
+	// (ConfigMap, Secret, CSI, emptyDir, an existing PersistentVolumeClaim, ...).
+	// To attach a volume to a single node, declare it under that node's
+	// spec.volumes instead. Volume names must be unique and must not collide with
+	// the names used by dataDirVolumeClaim, persistentVolumeClaims or any
+	// per-node claim.
+	Volumes []TeamCityVolume `json:"volumes,omitempty"`
+
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
 	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
@@ -83,6 +91,17 @@ type NodeSpec struct {
 	Responsibilities []string `json:"responsibilities,omitempty"`
 
 	NodeDataDirVolumeClaim *CustomPersistentVolumeClaim `json:"nodeDataDirVolumeClaim,omitempty"`
+
+	// PersistentVolumeClaims owned by this node alone, for example a git cache.
+	// Every node names its own claim, so nodes may use different storage classes
+	// and sizes behind the same mount path. The operator creates and manages each
+	// claim unless existingClaim is true, and never deletes it: removing an entry
+	// detaches the volume but leaves the data in place.
+	PersistentVolumeClaims []CustomPersistentVolumeClaim `json:"persistentVolumeClaims,omitempty"`
+
+	// Volumes attached to this node alone, using any Kubernetes volume source.
+	// Use teamcity.spec.volumes for volumes that every node should receive.
+	Volumes []TeamCityVolume `json:"volumes,omitempty"`
 }
 
 type Node struct {
@@ -108,6 +127,18 @@ type CustomPersistentVolumeClaim struct {
 	VolumeMount   v1.VolumeMount               `json:"volumeMount"`
 	Spec          v1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
 	ExistingClaim bool                         `json:"existingClaim,omitempty"`
+}
+
+// TeamCityVolume is a Kubernetes volume plus the operator-specific fields that
+// control where it is mounted and which nodes receive it.
+type TeamCityVolume struct {
+	v1.Volume `json:",inline"`
+
+	// Mount describes where to mount this volume inside the teamcity-server
+	// container. Omit it to define the volume without mounting it, which is
+	// useful when only an init container needs the volume; the init container
+	// then references it by name in its own volumeMounts.
+	Mount *v1.VolumeMount `json:"mount,omitempty"`
 }
 
 // TeamCityStatus defines the observed state of TeamCity
@@ -190,6 +221,30 @@ func (instance *TeamCity) NodeDataDirClaimNameFor(node Node) string {
 		return ""
 	}
 	return node.Spec.NodeDataDirVolumeClaim.Name
+}
+
+func (instance *TeamCity) NodePersistentVolumeClaimsFor(node Node) []CustomPersistentVolumeClaim {
+	var claims []CustomPersistentVolumeClaim
+	if node.Spec.NodeDataDirVolumeClaim != nil {
+		claims = append(claims, *node.Spec.NodeDataDirVolumeClaim)
+	}
+	claims = append(claims, node.Spec.PersistentVolumeClaims...)
+	return claims
+}
+
+func (instance *TeamCity) AllNodePersistentVolumeClaims() []CustomPersistentVolumeClaim {
+	var claims []CustomPersistentVolumeClaim
+	for _, node := range instance.GetAllNodes() {
+		claims = append(claims, instance.NodePersistentVolumeClaimsFor(node)...)
+	}
+	return claims
+}
+
+func (instance *TeamCity) VolumesFor(node Node) []TeamCityVolume {
+	var volumes []TeamCityVolume
+	volumes = append(volumes, instance.Spec.Volumes...)
+	volumes = append(volumes, node.Spec.Volumes...)
+	return volumes
 }
 
 func (instance *TeamCity) ServiceAccountProvided() bool {

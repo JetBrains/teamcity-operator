@@ -73,10 +73,7 @@ var _ webhook.Validator = &TeamCity{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (instance *TeamCity) ValidateCreate() (admission.Warnings, error) {
 	teamcitylog.Info("validate create", "name", instance.Name)
-	if warn, err := validateCommonFields(instance); err != nil {
-		return warn, err
-	}
-	return nil, nil
+	return validateCommonFields(instance)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -117,6 +114,28 @@ func (instance *TeamCity) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
+func hostPathVolumeWarnings(teamcity *TeamCity) admission.Warnings {
+	var warnings admission.Warnings
+	appendWarnings := func(basePath string, volumes []TeamCityVolume) {
+		for idx, volume := range volumes {
+			if volume.HostPath == nil {
+				continue
+			}
+			warnings = append(warnings, fmt.Sprintf(
+				"%s[%d] (%q) uses a hostPath volume: its contents depend on the Kubernetes node the pod is scheduled to and are lost on rescheduling",
+				basePath, idx, volume.Name))
+		}
+	}
+
+	appendWarnings("teamcity.spec.volumes", teamcity.Spec.Volumes)
+	nodes := append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...)
+	paths := nodeObjectPaths(teamcity)
+	for nodeIdx, node := range nodes {
+		appendWarnings(paths[nodeIdx]+".spec.volumes", node.Spec.Volumes)
+	}
+	return warnings
+}
+
 func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateRequestsOfAllNodes(teamcity); err != nil {
 		return nil, err
@@ -127,10 +146,11 @@ func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateAllCustomPersistentVolumeClaimsInObject(teamcity); err != nil {
 		return nil, err
 	}
+	warnings := hostPathVolumeWarnings(teamcity)
 	if responsibilityWarning, err := validateResponsibilitiesOfAllNodes(teamcity); err != nil || responsibilityWarning != "" {
-		return admission.Warnings{responsibilityWarning}, err
+		return append(warnings, responsibilityWarning), err
 	}
-	return nil, nil
+	return warnings, nil
 }
 
 func validateXmxPercentage(teamcity *TeamCity) (err error) {
@@ -165,6 +185,195 @@ func validateAllCustomPersistentVolumeClaimsInObject(teamcity *TeamCity) (err er
 	if err = validateNodeDataDirVolumeClaim(teamcity); err != nil {
 		return err
 	}
+	if err = validateNodePersistentVolumeClaims(teamcity); err != nil {
+		return err
+	}
+	if err = validateVolumes(teamcity); err != nil {
+		return err
+	}
+	return nil
+}
+
+func nodeObjectPaths(teamcity *TeamCity) []string {
+	paths := []string{"teamcity.spec.mainNode"}
+	for idx := range teamcity.Spec.SecondaryNodes {
+		paths = append(paths, fmt.Sprintf("teamcity.spec.secondaryNodes[%d]", idx))
+	}
+	return paths
+}
+
+func sharedVolumeNames(teamcity *TeamCity) map[string]string {
+	names := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.Name: "teamcity.spec.dataDirVolumeClaim.volumeMount.name",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		names[additional.VolumeMount.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.name", idx)
+	}
+	return names
+}
+
+func sharedMountPaths(teamcity *TeamCity) map[string]string {
+	paths := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.VolumeMount.MountPath: "teamcity.spec.dataDirVolumeClaim.volumeMount.mountPath",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		paths[additional.VolumeMount.MountPath] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].volumeMount.mountPath", idx)
+	}
+	return paths
+}
+
+func sharedClaimNames(teamcity *TeamCity) map[string]string {
+	names := map[string]string{
+		teamcity.Spec.DataDirVolumeClaim.Name: "teamcity.spec.dataDirVolumeClaim.name",
+	}
+	for idx, additional := range teamcity.Spec.PersistentVolumeClaims {
+		names[additional.Name] = fmt.Sprintf("teamcity.spec.persistentVolumeClaims[%d].name", idx)
+	}
+	return names
+}
+
+func validateNodePersistentVolumeClaims(teamcity *TeamCity) error {
+	reservedClaimNames := sharedClaimNames(teamcity)
+	claimNamesSeen := map[string]string{}
+	for _, node := range teamcity.GetAllNodes() {
+		if node.Spec.NodeDataDirVolumeClaim != nil {
+			claimNamesSeen[node.Spec.NodeDataDirVolumeClaim.Name] = node.Name
+		}
+	}
+
+	nodes := append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...)
+	paths := nodeObjectPaths(teamcity)
+	for nodeIdx, node := range nodes {
+		reservedVolumeNames := sharedVolumeNames(teamcity)
+		reservedMountPaths := sharedMountPaths(teamcity)
+		if node.Spec.NodeDataDirVolumeClaim != nil {
+			reservedVolumeNames[node.Spec.NodeDataDirVolumeClaim.VolumeMount.Name] = paths[nodeIdx] + ".spec.nodeDataDirVolumeClaim.volumeMount.name"
+			reservedMountPaths[node.Spec.NodeDataDirVolumeClaim.VolumeMount.MountPath] = paths[nodeIdx] + ".spec.nodeDataDirVolumeClaim.volumeMount.mountPath"
+		}
+
+		for idx, claim := range node.Spec.PersistentVolumeClaims {
+			claimPath := fmt.Sprintf("%s.spec.persistentVolumeClaims[%d]", paths[nodeIdx], idx)
+			if claim.ExistingClaim {
+				if err := validateNodeDataDirExistingClaim(claimPath, claim); err != nil {
+					return err
+				}
+			} else {
+				if err := validateCustomPersistentVolumeClaim(claimPath, claim); err != nil {
+					return err
+				}
+			}
+			if len(claim.Name) > maxKubernetesDNSSubdomainLength {
+				return typed.ValidationError{
+					Path:         claimPath + ".name",
+					ErrorMessage: fmt.Sprintf("claim name %q exceeds %d characters", claim.Name, maxKubernetesDNSSubdomainLength),
+				}
+			}
+			if path, exists := reservedClaimNames[claim.Name]; exists {
+				return typed.ValidationError{
+					Path:         claimPath + ".name",
+					ErrorMessage: fmt.Sprintf("collides with %s", path),
+				}
+			}
+			if previous, exists := claimNamesSeen[claim.Name]; exists {
+				return typed.ValidationError{
+					Path:         claimPath + ".name",
+					ErrorMessage: fmt.Sprintf("nodes %q and %q resolve to the same PVC %q", previous, node.Name, claim.Name),
+				}
+			}
+			claimNamesSeen[claim.Name] = node.Name
+
+			if path, exists := reservedVolumeNames[claim.VolumeMount.Name]; exists {
+				return typed.ValidationError{
+					Path:         claimPath + ".volumeMount.name",
+					ErrorMessage: fmt.Sprintf("collides with %s", path),
+				}
+			}
+			reservedVolumeNames[claim.VolumeMount.Name] = claimPath + ".volumeMount.name"
+
+			if path, exists := reservedMountPaths[claim.VolumeMount.MountPath]; exists {
+				return typed.ValidationError{
+					Path:         claimPath + ".volumeMount.mountPath",
+					ErrorMessage: fmt.Sprintf("collides with %s", path),
+				}
+			}
+			reservedMountPaths[claim.VolumeMount.MountPath] = claimPath + ".volumeMount.mountPath"
+		}
+	}
+	return nil
+}
+
+func validateVolumeEntry(volumePath string, volume TeamCityVolume) error {
+	if len(volume.Name) <= 0 {
+		return typed.ValidationError{
+			Path:         volumePath + ".name",
+			ErrorMessage: "Volume name is not set",
+		}
+	}
+	if volume.Mount != nil && len(volume.Mount.MountPath) <= 0 {
+		return typed.ValidationError{
+			Path:         volumePath + ".mount.mountPath",
+			ErrorMessage: "Volume mount path is not set",
+		}
+	}
+	return nil
+}
+
+func validateVolumes(teamcity *TeamCity) error {
+	specVolumeNames := map[string]string{}
+	for idx, volume := range teamcity.Spec.Volumes {
+		volumePath := fmt.Sprintf("teamcity.spec.volumes[%d]", idx)
+		if err := validateVolumeEntry(volumePath, volume); err != nil {
+			return err
+		}
+		if previous, exists := specVolumeNames[volume.Name]; exists {
+			return typed.ValidationError{
+				Path:         volumePath + ".name",
+				ErrorMessage: fmt.Sprintf("collides with %s", previous),
+			}
+		}
+		specVolumeNames[volume.Name] = volumePath + ".name"
+	}
+
+	nodes := append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...)
+	paths := nodeObjectPaths(teamcity)
+	for nodeIdx, node := range nodes {
+		reservedVolumeNames := sharedVolumeNames(teamcity)
+		reservedMountPaths := sharedMountPaths(teamcity)
+		for _, claim := range teamcity.NodePersistentVolumeClaimsFor(node) {
+			reservedVolumeNames[claim.VolumeMount.Name] = fmt.Sprintf("a per-node claim on %q", node.Name)
+			reservedMountPaths[claim.VolumeMount.MountPath] = fmt.Sprintf("a per-node claim on %q", node.Name)
+		}
+
+		specVolumeCount := len(teamcity.Spec.Volumes)
+		for idx, volume := range teamcity.VolumesFor(node) {
+			volumePath := fmt.Sprintf("teamcity.spec.volumes[%d]", idx)
+			if idx >= specVolumeCount {
+				volumePath = fmt.Sprintf("%s.spec.volumes[%d]", paths[nodeIdx], idx-specVolumeCount)
+				if err := validateVolumeEntry(volumePath, volume); err != nil {
+					return err
+				}
+			}
+			if path, exists := reservedVolumeNames[volume.Name]; exists {
+				return typed.ValidationError{
+					Path:         volumePath + ".name",
+					ErrorMessage: fmt.Sprintf("collides with %s on node %q", path, node.Name),
+				}
+			}
+			reservedVolumeNames[volume.Name] = volumePath + ".name"
+
+			if volume.Mount == nil {
+				continue
+			}
+			if path, exists := reservedMountPaths[volume.Mount.MountPath]; exists {
+				return typed.ValidationError{
+					Path:         volumePath + ".mount.mountPath",
+					ErrorMessage: fmt.Sprintf("collides with %s on node %q", path, node.Name),
+				}
+			}
+			reservedMountPaths[volume.Mount.MountPath] = volumePath + ".mount.mountPath"
+		}
+	}
+
 	return nil
 }
 

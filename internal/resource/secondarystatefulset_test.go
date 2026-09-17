@@ -118,7 +118,8 @@ var _ = Describe("Secondary StatefulSet", func() {
 				Expect(len(statefulSet.Spec.Template.Spec.Volumes)).To(Equal(1))
 
 				dataDirVolume := statefulSet.Spec.Template.Spec.Volumes[0]
-				Expect(dataDirVolume.Name).To(Equal(dataDirPVC.Name))
+				Expect(dataDirVolume.Name).To(Equal(dataDirPVC.VolumeMount.Name))
+				Expect(dataDirVolume.PersistentVolumeClaim.ClaimName).To(Equal(dataDirPVC.Name))
 
 				teamcityContainer := statefulSet.Spec.Template.Spec.Containers[0]
 				Expect(len(teamcityContainer.VolumeMounts)).To(Equal(1))
@@ -127,6 +128,19 @@ var _ = Describe("Secondary StatefulSet", func() {
 				Expect(dataDirVolumeMount.Name).To(Equal(dataDirPVC.VolumeMount.Name))
 				Expect(dataDirVolumeMount.MountPath).To(Equal(dataDirPVC.VolumeMount.MountPath))
 			}
+		})
+		It("mounts a volume declared on this node", func() {
+			Instance.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{getCsiVolume()}
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultSecondaryStatefulSetBuilder.Update(objectList[0])).To(Succeed())
+			statefulSet := objectList[0].(*v1.StatefulSet)
+
+			Expect(volumeNamesOf(statefulSet)).To(ContainElement("database-secret"))
+			mount := mountByName(statefulSet.Spec.Template.Spec.Containers[0], "database-secret")
+			Expect(mount).NotTo(BeNil())
+			Expect(mount.MountPath).To(Equal("/mnt/database"))
+			Expect(mount.ReadOnly).To(BeTrue())
 		})
 		It("returns obsolete objects correctly", func() {
 			obsoleteObjects, err := DefaultSecondaryStatefulSetBuilder.GetObsoleteObjects(context.Background())

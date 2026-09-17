@@ -30,9 +30,9 @@ func (builder PersistentVolumeClaimBuilder) BuildObjectList() ([]client.Object, 
 			ObjectMeta: metav1.ObjectMeta{Name: pvc.Name, Namespace: builder.Instance.Namespace},
 		})
 	}
-	for _, nodeDataPVC := range builder.nodeDataDirClaimsToManage() {
+	for _, nodePVC := range builder.nodeClaimsToManage() {
 		objectList = append(objectList, &v12.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Name: nodeDataPVC.Name, Namespace: builder.Instance.Namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: nodePVC.Name, Namespace: builder.Instance.Namespace},
 		})
 	}
 	return objectList, nil
@@ -49,8 +49,8 @@ func (builder PersistentVolumeClaimBuilder) Update(object client.Object) error {
 	persistentVolumeClaim := object.(*v12.PersistentVolumeClaim)
 	persistentVolumeClaim.Annotations = desired.Annotations
 	labels := metadata.GetLabels(builder.Instance.Name, builder.Instance.Labels)
-	if builder.isManagedNodeDataDirClaim(object.GetName()) {
-		labels = metadata.WithNodeDataDirLabel(labels)
+	if builder.isManagedNodeClaim(object.GetName()) {
+		labels = metadata.WithNodePVCLabel(labels)
 	}
 	persistentVolumeClaim.Labels = labels
 	persistentVolumeClaim.Spec.AccessModes = desired.Spec.AccessModes
@@ -84,13 +84,13 @@ func (builder PersistentVolumeClaimBuilder) GetObsoleteObjects(ctx context.Conte
 	}
 
 	desiredNames := builder.desiredClaimNamesForObsoleteCheck()
-	retainedNodeDataNames := builder.retainedNodeDataClaimNames()
+	retainedNodeClaimNames := builder.retainedNodeClaimNames()
 	for _, pvc := range currentPVCList.Items {
 		s := pvc
-		if metadata.IsNodeDataDirPVC(pvc.Labels) {
+		if metadata.IsNodePVC(pvc.Labels) {
 			continue
 		}
-		if _, retained := retainedNodeDataNames[pvc.Name]; retained {
+		if _, retained := retainedNodeClaimNames[pvc.Name]; retained {
 			continue
 		}
 		if _, desired := desiredNames[pvc.Name]; !desired {
@@ -116,7 +116,7 @@ func (builder PersistentVolumeClaimBuilder) getPVCIndex(object client.Object, pv
 func (builder PersistentVolumeClaimBuilder) allManagedClaims() []CustomPersistentVolumeClaim {
 	pvcList := []CustomPersistentVolumeClaim{builder.Instance.Spec.DataDirVolumeClaim}
 	pvcList = append(pvcList, builder.Instance.Spec.PersistentVolumeClaims...)
-	pvcList = append(pvcList, builder.nodeDataDirClaimsToManage()...)
+	pvcList = append(pvcList, builder.nodeClaimsToManage()...)
 	return pvcList
 }
 
@@ -130,19 +130,16 @@ func (builder PersistentVolumeClaimBuilder) desiredClaimNamesForObsoleteCheck() 
 	return names
 }
 
-func (builder PersistentVolumeClaimBuilder) retainedNodeDataClaimNames() map[string]struct{} {
+func (builder PersistentVolumeClaimBuilder) retainedNodeClaimNames() map[string]struct{} {
 	names := map[string]struct{}{}
-	for _, node := range builder.Instance.GetAllNodes() {
-		if node.Spec.NodeDataDirVolumeClaim == nil {
-			continue
-		}
-		names[node.Spec.NodeDataDirVolumeClaim.Name] = struct{}{}
+	for _, claim := range builder.Instance.AllNodePersistentVolumeClaims() {
+		names[claim.Name] = struct{}{}
 	}
 	return names
 }
 
-func (builder PersistentVolumeClaimBuilder) isManagedNodeDataDirClaim(name string) bool {
-	for _, claim := range builder.nodeDataDirClaimsToManage() {
+func (builder PersistentVolumeClaimBuilder) isManagedNodeClaim(name string) bool {
+	for _, claim := range builder.nodeClaimsToManage() {
 		if claim.Name == name {
 			return true
 		}
@@ -150,16 +147,13 @@ func (builder PersistentVolumeClaimBuilder) isManagedNodeDataDirClaim(name strin
 	return false
 }
 
-func (builder PersistentVolumeClaimBuilder) nodeDataDirClaimsToManage() []CustomPersistentVolumeClaim {
+func (builder PersistentVolumeClaimBuilder) nodeClaimsToManage() []CustomPersistentVolumeClaim {
 	var claims []CustomPersistentVolumeClaim
-	for _, node := range builder.Instance.GetAllNodes() {
-		if node.Spec.NodeDataDirVolumeClaim == nil {
+	for _, claim := range builder.Instance.AllNodePersistentVolumeClaims() {
+		if claim.ExistingClaim {
 			continue
 		}
-		if node.Spec.NodeDataDirVolumeClaim.ExistingClaim {
-			continue
-		}
-		claims = append(claims, *node.Spec.NodeDataDirVolumeClaim)
+		claims = append(claims, claim)
 	}
 	return claims
 }
