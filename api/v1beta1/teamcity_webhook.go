@@ -116,12 +116,22 @@ func (instance *TeamCity) ValidateDelete() (admission.Warnings, error) {
 
 func hostPathVolumeWarnings(teamcity *TeamCity) admission.Warnings {
 	var warnings admission.Warnings
-	for idx, volume := range teamcity.Spec.Volumes {
-		if volume.HostPath != nil {
+	appendWarnings := func(basePath string, volumes []TeamCityVolume) {
+		for idx, volume := range volumes {
+			if volume.HostPath == nil {
+				continue
+			}
 			warnings = append(warnings, fmt.Sprintf(
-				"teamcity.spec.volumes[%d] (%q) uses a hostPath volume: its contents depend on the Kubernetes node the pod is scheduled to and are lost on rescheduling",
-				idx, volume.Name))
+				"%s[%d] (%q) uses a hostPath volume: its contents depend on the Kubernetes node the pod is scheduled to and are lost on rescheduling",
+				basePath, idx, volume.Name))
 		}
+	}
+
+	appendWarnings("teamcity.spec.volumes", teamcity.Spec.Volumes)
+	nodes := append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...)
+	paths := nodeObjectPaths(teamcity)
+	for nodeIdx, node := range nodes {
+		appendWarnings(paths[nodeIdx]+".spec.volumes", node.Spec.Volumes)
 	}
 	return warnings
 }

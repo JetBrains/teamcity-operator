@@ -147,21 +147,74 @@ func TestValidateVolumesAllowsSameVolumeNameOnDifferentNodes(t *testing.T) {
 
 func TestValidateVolumesWarnsAboutHostPath(t *testing.T) {
 	tc := validTeamCityForWebhookTest()
-	tc.Spec.Volumes = []TeamCityVolume{
-		{
-			Volume: corev1.Volume{
-				Name: "host-scratch",
-				VolumeSource: corev1.VolumeSource{
-					HostPath: &corev1.HostPathVolumeSource{Path: "/tmp/scratch"},
-				},
-			},
-			Mount: &corev1.VolumeMount{MountPath: "/mnt/scratch"},
-		},
+	tc.Spec.Volumes = []TeamCityVolume{hostPathVolumeForWebhookTest("host-scratch", "/mnt/scratch")}
+	warnings, err := tc.ValidateCreate()
+	require.NoError(t, err)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "hostPath")
+	assert.Contains(t, warnings[0], "teamcity.spec.volumes[0]")
+}
+
+func TestValidateVolumesWarnsAboutHostPathOnMainNode(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		hostPathVolumeForWebhookTest("host-scratch", "/mnt/scratch"),
 	}
 	warnings, err := tc.ValidateCreate()
 	require.NoError(t, err)
-	require.NotEmpty(t, warnings)
+	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "hostPath")
+	assert.Contains(t, warnings[0], "teamcity.spec.mainNode.spec.volumes[0]")
+}
+
+func TestValidateVolumesWarnsAboutHostPathOnSecondaryNode(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.SecondaryNodes = []Node{secondaryNodeForWebhookTest("secondary")}
+	tc.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+		hostPathVolumeForWebhookTest("host-scratch", "/mnt/scratch"),
+	}
+	warnings, err := tc.ValidateCreate()
+	require.NoError(t, err)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "hostPath")
+	assert.Contains(t, warnings[0], "teamcity.spec.secondaryNodes[0].spec.volumes[0]")
+}
+
+func TestValidateVolumesWarnsAboutEveryHostPath(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.SecondaryNodes = []Node{secondaryNodeForWebhookTest("secondary")}
+	tc.Spec.Volumes = []TeamCityVolume{hostPathVolumeForWebhookTest("shared-scratch", "/mnt/shared")}
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		hostPathVolumeForWebhookTest("main-scratch", "/mnt/main"),
+	}
+	tc.Spec.SecondaryNodes[0].Spec.Volumes = []TeamCityVolume{
+		hostPathVolumeForWebhookTest("secondary-scratch", "/mnt/secondary"),
+	}
+	warnings, err := tc.ValidateCreate()
+	require.NoError(t, err)
+	require.Len(t, warnings, 3)
+}
+
+func TestValidateVolumesNoHostPathNoWarning(t *testing.T) {
+	tc := validTeamCityForWebhookTest()
+	tc.Spec.MainNode.Spec.Volumes = []TeamCityVolume{
+		configMapVolumeForWebhookTest("extra-config", "/mnt/extra-config"),
+	}
+	warnings, err := tc.ValidateCreate()
+	require.NoError(t, err)
+	assert.Empty(t, warnings)
+}
+
+func hostPathVolumeForWebhookTest(name string, mountPath string) TeamCityVolume {
+	return TeamCityVolume{
+		Volume: corev1.Volume{
+			Name: name,
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{Path: "/tmp/scratch"},
+			},
+		},
+		Mount: &corev1.VolumeMount{MountPath: mountPath},
+	}
 }
 
 func TestValidateNodePersistentVolumeClaimsGreenfield(t *testing.T) {
