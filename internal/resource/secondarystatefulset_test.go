@@ -78,15 +78,22 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 
 		})
-		It("sets prestop command for container", func() {
+		It("does not set a container lifecycle to let the image handle SIGTERM gracefully", func() {
 			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
 			for _, object := range objectList {
 				err = DefaultSecondaryStatefulSetBuilder.Update(object)
 				statefulSet := object.(*v1.StatefulSet)
-				expected := []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"}
-				actual := statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command
-				Expect(actual).To(Equal(expected))
+				Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil())
+			}
+		})
+		It("sets termination grace period long enough for a graceful server stop", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(*statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds).To(Equal(int64(90)))
 			}
 		})
 		It("sets responsibility in serveropts correctly", func() {
@@ -400,6 +407,33 @@ var _ = Describe("Secondary StatefulSet", func() {
 					Expect(idx).To(BeNumerically(">=", 0), "env variable %q should be present", expected.Name)
 					Expect(env[idx]).To(Equal(expected))
 				}
+			}
+		})
+	})
+	Context("TeamCity with a custom stop wait time", func() {
+		const stopWaitTimeSeconds = int64(450)
+
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				DefaultClient = &secondaryStatefulSetK8sClientMock{}
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.StopWaitTimeSeconds = stopWaitTimeSeconds
+			})
+		})
+		It("injects the stop wait on every secondary and derives its grace period", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				Expect(err).NotTo(HaveOccurred())
+				statefulSet := object.(*v1.StatefulSet)
+				env := statefulSet.Spec.Template.Spec.Containers[0].Env
+
+				idx := slices.IndexFunc(env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_STOP_WAIT_TIME" })
+				Expect(idx).To(BeNumerically(">=", 0))
+				Expect(env[idx].Value).To(Equal(fmt.Sprintf("%d", stopWaitTimeSeconds)))
+				Expect(*statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds).
+					To(Equal(stopWaitTimeSeconds + teamcityTerminationGraceBufferSeconds))
 			}
 		})
 	})

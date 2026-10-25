@@ -11642,6 +11642,14 @@ spec:
                   type: string
                 default: {}
                 type: object
+              stopWaitTimeSeconds:
+                default: 60
+                description: |-
+                  Seconds the server image waits for a graceful stop before killing the
+                  JVM (TEAMCITY_STOP_WAIT_TIME). The termination grace period of the pods
+                  is derived from it.
+                format: int64
+                type: integer
               volumes:
                 description: |-
                   Volumes attached to every node, using any Kubernetes volume source

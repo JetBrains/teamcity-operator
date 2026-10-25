@@ -66,16 +66,23 @@ var _ = Describe("StatefulSet", func() {
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Resources
 			Expect(actual).To(Equal(expected))
 		})
-		It("sets prestop command for container", func() {
+		It("does not set a container lifecycle to let the image handle SIGTERM gracefully", func() {
 			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
 			Expect(err).NotTo(HaveOccurred())
 			stsObject := obj[0]
 			err = DefaultStatefulSetBuilder.Update(stsObject)
 			Expect(err).NotTo(HaveOccurred())
 			statefulSet := stsObject.(*v1.StatefulSet)
-			expected := []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"}
-			actual := statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command
-			Expect(actual).To(Equal(expected))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil())
+		})
+		It("sets termination grace period long enough for a graceful server stop", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			Expect(*statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds).To(Equal(int64(90)))
 		})
 		It("calculates and provides env vars correctly", func() {
 			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
@@ -125,7 +132,11 @@ var _ = Describe("StatefulSet", func() {
 				Value: "-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC" +
 					fmt.Sprintf(" -XX:HeapDumpPath=%s%s%s", datadirPath, "/memoryDumps/", Instance.Spec.MainNode.Name) +
 					fmt.Sprintf(" -Dteamcity.server.nodeId=%s", Instance.Spec.MainNode.Name) + " -Dteamcity.server.rootURL=http://$(POD_NAME).$(POD_NAMESPACE)"}
-			expected := append([]v12.EnvVar{}, podName, podNamespace, dataPath, logsPath, memOpts, serverOpts)
+			stopWaitTime := v12.EnvVar{
+				Name:  "TEAMCITY_STOP_WAIT_TIME",
+				Value: "60",
+			}
+			expected := append([]v12.EnvVar{}, podName, podNamespace, dataPath, logsPath, memOpts, serverOpts, stopWaitTime)
 			actual := statefulSet.Spec.Template.Spec.Containers[0].Env
 			envVarsAreEqual := assert.ElementsMatch(GinkgoT(), expected, actual)
 			Expect(envVarsAreEqual).To(Equal(true))
@@ -638,4 +649,36 @@ var _ = Describe("StatefulSet", func() {
 		})
 	})
 
+	Context("TeamCity with a custom stop wait time", func() {
+		const stopWaitTimeSeconds = int64(450)
+
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.StopWaitTimeSeconds = stopWaitTimeSeconds
+			})
+		})
+		It("injects the stop wait as TEAMCITY_STOP_WAIT_TIME", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			env := stsObject.(*v1.StatefulSet).Spec.Template.Spec.Containers[0].Env
+
+			idx := slices.IndexFunc(env, func(c v12.EnvVar) bool { return c.Name == "TEAMCITY_STOP_WAIT_TIME" })
+			Expect(idx).To(BeNumerically(">=", 0))
+			Expect(env[idx].Value).To(Equal(fmt.Sprintf("%d", stopWaitTimeSeconds)))
+		})
+		It("derives the termination grace period from the stop wait", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+
+			Expect(*statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds).
+				To(Equal(stopWaitTimeSeconds + teamcityTerminationGraceBufferSeconds))
+		})
+	})
 })
