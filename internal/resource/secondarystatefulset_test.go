@@ -3,6 +3,8 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,7 +13,6 @@ import (
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 var _ = Describe("Secondary StatefulSet", func() {
@@ -360,6 +361,13 @@ var _ = Describe("Secondary StatefulSet", func() {
 				err = DefaultSecondaryStatefulSetBuilder.Update(object)
 				statefulSet := object.(*v1.StatefulSet)
 				Expect(statefulSet.Spec.ServiceName).To(Equal(Instance.Spec.SecondaryNodes[i].Spec.ServiceName))
+				containerEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+				serverOptsIndex := slices.IndexFunc(containerEnv, func(envVar v12.EnvVar) bool {
+					return envVar.Name == "TEAMCITY_SERVER_OPTS"
+				})
+				Expect(serverOptsIndex).To(BeNumerically(">=", 0))
+				expectedRootURL := fmt.Sprintf("-Dteamcity.server.rootURL=http://$(POD_NAME).%s.$(POD_NAMESPACE).svc", Instance.Spec.SecondaryNodes[i].Spec.ServiceName)
+				Expect(containerEnv[serverOptsIndex].Value).To(ContainSubstring(expectedRootURL))
 			}
 		})
 		It("allows multiple secondary nodes to use the same serviceName", func() {

@@ -2,6 +2,8 @@ package resource
 
 import (
 	"fmt"
+	"strings"
+
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,7 +13,6 @@ import (
 	v12 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"strings"
 )
 
 var _ = Describe("StatefulSet", func() {
@@ -595,6 +596,25 @@ var _ = Describe("StatefulSet", func() {
 			statefulSetLabels := statefulSet.Labels
 			providedLabels := getLabels()
 			Expect(statefulSetLabels["app.kubernetes.io/name"]).ToNot(Equal(providedLabels["app.kubernetes.io/name"]))
+		})
+	})
+	Context("TeamCity with serviceName", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.MainNode.Spec.ServiceName = "main-headless-svc"
+			})
+		})
+		It("sets rootURL in TEAMCITY_SERVER_OPTS with serviceName", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(DefaultStatefulSetBuilder.Update(obj[0])).To(Succeed())
+			statefulSet := obj[0].(*v1.StatefulSet)
+			env := statefulSet.Spec.Template.Spec.Containers[0].Env
+			serverOptsIndex := slices.IndexFunc(env, func(envVar v12.EnvVar) bool {
+				return envVar.Name == "TEAMCITY_SERVER_OPTS"
+			})
+			Expect(serverOptsIndex).To(BeNumerically(">=", 0))
+			Expect(env[serverOptsIndex].Value).To(ContainSubstring("-Dteamcity.server.rootURL=http://$(POD_NAME).main-headless-svc.$(POD_NAMESPACE).svc"))
 		})
 	})
 	Context("TeamCity with service account", func() {
