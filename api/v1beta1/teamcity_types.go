@@ -47,6 +47,11 @@ type TeamCitySpec struct {
 
 	// +kubebuilder:default:=95
 	XmxPercentage int64 `json:"xmxPercentage,omitempty"`
+	// Seconds the server image waits for a graceful stop before killing the
+	// JVM (TEAMCITY_STOP_WAIT_TIME). The termination grace period of the pods
+	// is derived from it.
+	// +kubebuilder:default:=60
+	StopWaitTimeSeconds int64 `json:"stopWaitTimeSeconds,omitempty"`
 	// +kubebuilder:default:={name: tc-server-port, containerPort: 8111}
 	TeamCityServerPort v1.ContainerPort `json:"TeamCityServerPort,omitempty"`
 
@@ -190,6 +195,18 @@ func (instance *TeamCity) DatabaseSecretProvided() bool {
 
 func (instance *TeamCity) DataDirPath() string {
 	return instance.Spec.DataDirVolumeClaim.VolumeMount.MountPath
+}
+
+// StopWaitTime returns the time in seconds given to the TeamCity server to
+// stop gracefully before the JVM is killed, falling back to the default when
+// unset: CRD defaults do not apply to resources created before the field
+// existed.
+func (instance *TeamCity) StopWaitTime() int64 {
+	defaultStopWaitTimeSeconds := int64(60)
+	if instance.Spec.StopWaitTimeSeconds > 0 {
+		return instance.Spec.StopWaitTimeSeconds
+	}
+	return defaultStopWaitTimeSeconds
 }
 
 func (instance *TeamCity) GetAllCustomPersistentVolumeClaim() []CustomPersistentVolumeClaim {

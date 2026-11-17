@@ -18,6 +18,15 @@ const (
 	TEAMCITY_DB_URL_SECRET_KEY      = "connectionUrl"
 )
 
+// Kubelet waits terminationGracePeriodSeconds from the start of pod termination
+// before it sends SIGKILL, therefore the value must cover the image's own
+// graceful stop sequence: the latter waits up to StopWaitTimeSeconds
+// (injected as TEAMCITY_STOP_WAIT_TIME) before catalina.sh force-kills the
+// JVM. A fixed buffer on top of the stop wait covers that force-kill and the
+// final teardown. Without an explicit grace period the pod falls back to the
+// Kubernetes default of 30 seconds, which is shorter than the default stop wait.
+const teamcityTerminationGraceBufferSeconds int64 = 30
+
 func CreateEmptyStatefulSet(name string, namespace string, labels map[string]string) v1.StatefulSet {
 	return v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -96,19 +105,6 @@ func NodeDataDirServerOpt(nodeDataDirPath string) string {
 func XmxValueCalculator(percentage int64, requestedMemoryValue int64) (xmxValue string) {
 	ratio := float64(percentage) / 100
 	xmxValue = resource.NewQuantity(int64(ratio*float64(requestedMemoryValue)), resource.DecimalSI).String()
-	return
-}
-
-func LifecycleOptionsBuilder() (lifecycle *v12.Lifecycle) {
-	lifecycle = &v12.Lifecycle{
-		PostStart: nil,
-		PreStop: &v12.LifecycleHandler{
-			Exec: &v12.ExecAction{
-				Command: []string{"/bin/sh", "-c", "/opt/teamcity/bin/shutdown.sh"},
-			},
-			HTTPGet: nil,
-		},
-	}
 	return
 }
 
@@ -197,7 +193,6 @@ func ConfigureContainer(instance *TeamCity, node Node, container *v12.Container)
 	container.Image = instance.Spec.Image
 	container.ImagePullPolicy = v12.PullIfNotPresent
 
-	container.Lifecycle = LifecycleOptionsBuilder()
 	container.LivenessProbe = &node.Spec.LivenessProbeSettings
 	container.ReadinessProbe = &node.Spec.ReadinessProbeSettings
 	container.StartupProbe = &node.Spec.StartupProbeSettings
@@ -222,6 +217,8 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	volumes = append(volumes, BuildVolumesFromPersistentVolumeClaims(instance.NodePersistentVolumeClaimsFor(node))...)
 	volumes = append(volumes, BuildVolumesFromTeamCityVolumes(instance.VolumesFor(node))...)
 	current.Spec.Replicas = pointer.Int32(1)
+	current.Spec.Template.Spec.TerminationGracePeriodSeconds =
+		pointer.Int64(instance.StopWaitTime() + teamcityTerminationGraceBufferSeconds)
 	current.Spec.Template.Annotations = node.Annotations
 	current.Spec.Template.Spec.Volumes = volumes
 	current.Spec.Template.Spec.InitContainers = node.Spec.InitContainers
@@ -287,6 +284,13 @@ func BuildEnvVariablesFromGlobalAndNodeSpecificSettings(instance *TeamCity, node
 	xmxValue := XmxValueCalculator(instance.Spec.XmxPercentage, node.Spec.Requests.Memory().Value())
 	envVars := DefaultEnvironmentVariableBuilder(node.Name, xmxValue, dataDirPath, extraServerOpts)
 	envVars = append(envVars, node.Spec.Env...)
+
+	// The operator appends this after the node env, so a copy in the node
+	// env loses by last-definition-wins and the field value applies.
+	envVars = append(envVars, v12.EnvVar{
+		Name:  "TEAMCITY_STOP_WAIT_TIME",
+		Value: fmt.Sprintf("%d", instance.StopWaitTime()),
+	})
 	if instance.DatabaseSecretProvided() {
 		databaseEnvVars := DatabaseEnvVarBuilder(instance.Spec.DatabaseSecret.Secret)
 		envVars = append(envVars, databaseEnvVars...)
