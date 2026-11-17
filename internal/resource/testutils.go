@@ -176,6 +176,22 @@ func getAffinity() corev1.Affinity {
 	}
 }
 
+func getTolerations() []corev1.Toleration {
+	return []corev1.Toleration{
+		{
+			Key:      "some-key",
+			Operator: "Equal",
+			Value:    "some-value",
+			Effect:   "NoSchedule",
+		},
+		{
+			Key:      "another-key",
+			Operator: "Exists",
+			Effect:   "NoExecute",
+		},
+	}
+}
+
 func getInitContainers() []corev1.Container {
 	return []corev1.Container{
 		{

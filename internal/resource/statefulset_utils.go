@@ -223,6 +223,7 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	current.Spec.Template.Spec.Volumes = volumes
 	current.Spec.Template.Spec.InitContainers = node.Spec.InitContainers
 	current.Spec.Template.Spec.NodeSelector = node.Spec.NodeSelector
+	current.Spec.Template.Spec.Tolerations = node.Spec.Tolerations
 	current.Spec.Template.Spec.Affinity = &node.Spec.Affinity
 	current.Spec.Template.Spec.SecurityContext = &node.Spec.PodSecurityContext
 	current.Spec.Template.Spec.ServiceAccountName = instance.Spec.ServiceAccount.Name

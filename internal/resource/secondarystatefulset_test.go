@@ -277,6 +277,24 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
+	Context("TeamCity with tolerations", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.Tolerations = getTolerations()
+				teamcity.Spec.SecondaryNodes[1].Spec.Tolerations = getTolerations()
+			})
+		})
+		It("sets tolerations correctly", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(getTolerations()))
+			}
+		})
+	})
 	Context("TeamCity with affinity", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {

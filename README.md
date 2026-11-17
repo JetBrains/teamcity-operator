@@ -63,6 +63,7 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_serviceaccount.yaml` | Dedicated ServiceAccount |
 | `_v1beta1_teamcity_with_init_containers.yaml` | Custom init containers |
 | `_v1beta1_teamcity_with_node_selector.yaml` | Node selector |
+| `_v1beta1_teamcity_with_tolerations.yaml` | Tolerations |
 | `_v1beta1_teamcity_with_affinity.yaml` | Pod affinity |
 | `_v1beta1_teamcity_with_service.yaml` | Headless Service + `serviceName` (new deployment) |
 | `_v1beta1_teamcity_with_service_name_recreate.yaml` | `serviceName` change on existing deployment |

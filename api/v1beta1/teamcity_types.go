@@ -87,6 +87,8 @@ type NodeSpec struct {
 
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
+
 	Affinity v1.Affinity `json:"affinity,omitempty"`
 
 	// ServiceName is the name of the service that governs this StatefulSet.

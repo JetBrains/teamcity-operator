@@ -1,0 +1,40 @@
+# TeamCity with tolerations on the main node.
+#
+# Sets spec.mainNode.spec.tolerations to let the pod schedule onto tainted
+# nodes (dedicated pools are commonly tainted with NoSchedule).
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_tolerations.yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-tolerations
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+   name: main-node
+   spec:
+    requests:
+      cpu: "1000m"
+      memory: "2500Mi"
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: teamcity
+        effect: NoSchedule
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+    mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
