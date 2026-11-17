@@ -552,6 +552,22 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(getNodeSelector()))
 		})
 	})
+	Context("TeamCity with tolerations", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.MainNode.Spec.Tolerations = getTolerations()
+			})
+		})
+		It("sets tolerations correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(getTolerations()))
+		})
+	})
 	Context("TeamCity with affinity", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
