@@ -277,7 +277,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
-	Context("TeamCity with tolerations", func() {
+Context("TeamCity with tolerations", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
@@ -292,6 +292,24 @@ var _ = Describe("Secondary StatefulSet", func() {
 				err = DefaultSecondaryStatefulSetBuilder.Update(object)
 				statefulSet := object.(*v1.StatefulSet)
 				Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(getTolerations()))
+			}
+		})
+	})
+	Context("TeamCity with priority class name", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.PriorityClassName = getPriorityClassName()
+				teamcity.Spec.SecondaryNodes[1].Spec.PriorityClassName = getPriorityClassName()
+			})
+		})
+		It("sets priority class name correctly", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(getPriorityClassName()))
 			}
 		})
 	})

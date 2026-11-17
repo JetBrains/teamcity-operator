@@ -1,0 +1,34 @@
+# TeamCity with priorityClassName on the main node.
+#
+# Sets spec.mainNode.spec.priorityClassName to schedule the pod with the
+# given PriorityClass (for example to protect it from eviction).
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_priority_class_name.yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-priority-class-name
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+   name: main-node
+   spec:
+    requests:
+      cpu: "1000m"
+      memory: "2500Mi"
+    priorityClassName: teamcity-priority
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
