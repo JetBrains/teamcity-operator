@@ -552,7 +552,7 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(getNodeSelector()))
 		})
 	})
-Context("TeamCity with tolerations", func() {
+	Context("TeamCity with tolerations", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.MainNode.Spec.Tolerations = getTolerations()

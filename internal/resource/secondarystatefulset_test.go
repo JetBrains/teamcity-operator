@@ -277,7 +277,7 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
-Context("TeamCity with tolerations", func() {
+	Context("TeamCity with tolerations", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {
 				teamcity.Spec.SecondaryNodes = getSecondaryNodes()

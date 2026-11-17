@@ -24,13 +24,15 @@ TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity ser
 
 ### Install the Operator via Helm
 
-Install release 0.0.21 of the chart from GitHub Releases:
+Install the chart from GHCR:
 
 ```shell
 helm upgrade --install teamcity-operator \
   -n teamcity-operator --create-namespace \
-  https://github.com/JetBrains/teamcity-operator/releases/download/0.0.21/teamcity-operator-0.0.21.tgz
+  oci://ghcr.io/felipecrs/charts/teamcity-operator --version <version>
 ```
+
+Replace `<version>` with the desired chart version (e.g. `0.0.25`).
 
 #### Install from source
 
