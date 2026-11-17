@@ -196,6 +196,26 @@ func getTolerations() []corev1.Toleration {
 	}
 }
 
+func getTopologySpreadConstraints() []corev1.TopologySpreadConstraint {
+	return []corev1.TopologySpreadConstraint{
+		{
+			MaxSkew:           1,
+			TopologyKey:       "topology.kubernetes.io/zone",
+			WhenUnsatisfiable: corev1.DoNotSchedule,
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"some-key": "some-value",
+				},
+			},
+		},
+		{
+			MaxSkew:           2,
+			TopologyKey:       "kubernetes.io/hostname",
+			WhenUnsatisfiable: corev1.ScheduleAnyway,
+		},
+	}
+}
+
 func getInitContainers() []corev1.Container {
 	return []corev1.Container{
 		{

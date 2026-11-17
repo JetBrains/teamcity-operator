@@ -313,6 +313,24 @@ var _ = Describe("Secondary StatefulSet", func() {
 			}
 		})
 	})
+	Context("TeamCity with topology spread constraints", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.SecondaryNodes = getSecondaryNodes()
+				teamcity.Spec.SecondaryNodes[0].Spec.TopologySpreadConstraints = getTopologySpreadConstraints()
+				teamcity.Spec.SecondaryNodes[1].Spec.TopologySpreadConstraints = getTopologySpreadConstraints()
+			})
+		})
+		It("sets topology spread constraints correctly", func() {
+			objectList, err := DefaultSecondaryStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			for _, object := range objectList {
+				err = DefaultSecondaryStatefulSetBuilder.Update(object)
+				statefulSet := object.(*v1.StatefulSet)
+				Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints).To(Equal(getTopologySpreadConstraints()))
+			}
+		})
+	})
 	Context("TeamCity with affinity", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {

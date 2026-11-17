@@ -160,6 +160,13 @@ func (in *NodeSpec) DeepCopyInto(out *NodeSpec) {
 		}
 	}
 	in.Affinity.DeepCopyInto(&out.Affinity)
+	if in.TopologySpreadConstraints != nil {
+		in, out := &in.TopologySpreadConstraints, &out.TopologySpreadConstraints
+		*out = make([]v1.TopologySpreadConstraint, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Responsibilities != nil {
 		in, out := &in.Responsibilities, &out.Responsibilities
 		*out = make([]string, len(*in))

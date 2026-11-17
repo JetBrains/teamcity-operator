@@ -1,0 +1,41 @@
+# TeamCity with topology spread constraints on the main node.
+#
+# Sets spec.mainNode.spec.topologySpreadConstraints to control how node pods
+# spread across topology domains. With multiple nodes, this keeps them from
+# landing on the same host or in the same zone, depending on the topology key.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_topology_spread_constraints.yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-topology-spread-constraints
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+   name: main-node
+   spec:
+    requests:
+      cpu: "1000m"
+      memory: "2500Mi"
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: teamcity-sample-with-topology-spread-constraints
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+    mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi

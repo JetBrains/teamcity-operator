@@ -94,6 +94,8 @@ type NodeSpec struct {
 
 	Affinity v1.Affinity `json:"affinity,omitempty"`
 
+	TopologySpreadConstraints []v1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+
 	// ServiceName is the name of the service that governs this StatefulSet.
 	// If empty, the StatefulSet spec.serviceName will not be set.
 	ServiceName string `json:"serviceName,omitempty"`

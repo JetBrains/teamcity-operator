@@ -226,6 +226,7 @@ func ConfigureStatefulSet(instance *TeamCity, node Node, current *v1.StatefulSet
 	current.Spec.Template.Spec.Tolerations = node.Spec.Tolerations
 	current.Spec.Template.Spec.PriorityClassName = node.Spec.PriorityClassName
 	current.Spec.Template.Spec.Affinity = &node.Spec.Affinity
+	current.Spec.Template.Spec.TopologySpreadConstraints = node.Spec.TopologySpreadConstraints
 	current.Spec.Template.Spec.SecurityContext = &node.Spec.PodSecurityContext
 	current.Spec.Template.Spec.ServiceAccountName = instance.Spec.ServiceAccount.Name
 	current.Spec.Template.Spec.DeprecatedServiceAccount = ""
