@@ -89,6 +89,8 @@ func (r *TeamcityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	pingReconcileHealth(&teamcity)
+
 	isMarkedForDeletion := teamcity.GetDeletionTimestamp() != nil
 	if isMarkedForDeletion {
 		log.V(1).Info("TeamCity object is marked for deletion")
