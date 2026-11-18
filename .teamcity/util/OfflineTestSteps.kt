@@ -34,6 +34,7 @@ object OfflineTestSteps {
     """.trimIndent()
 
     fun prefetchScriptContent(): String = """
+        #!/usr/bin/env bash
         set -euo pipefail
         case "${'$'}(uname -m)" in
           x86_64) ARCH=amd64; SHA512=$envtestSha512Amd64 ;;
@@ -60,6 +61,7 @@ object OfflineTestSteps {
     """.trimIndent()
 
     fun offlineTestScriptContent(): String = """
+        #!/usr/bin/env bash
         set -euo pipefail
         cat > .offline-test.sh <<'EOF'
         set -euo pipefail
