@@ -12,4 +12,7 @@ var _ = Describe("NodeDataDirServerOpt", func() {
 	It("returns the node data path server option", func() {
 		Expect(NodeDataDirServerOpt("/mnt/node-data-dir")).To(Equal(" -Dteamcity.node.data.path=/mnt/node-data-dir"))
 	})
+	It("starts with the server option prefix", func() {
+		Expect(NodeDataDirServerOpt("/data")).To(HavePrefix(NodeDataDirServerOptPrefix))
+	})
 })
