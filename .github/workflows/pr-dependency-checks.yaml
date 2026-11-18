@@ -53,5 +53,5 @@ jobs:
         with:
           fail-on-severity: low
           comment-summary-in-pr: never
-          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT, ISC, MPL-2.0
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT, ISC, MPL-2.0, LicenseRef-scancode-google-patent-license-golang
           show-patched-versions: true
