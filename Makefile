@@ -160,7 +160,7 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 	$(KUSTOMIZE) build config/crd | kubectl apply --server-side --force-conflicts -f -
 
 .PHONY: install-with-local-webhooks
-install-with-local-webhooks: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install-with-local-webhooks: manifests kustomize ## Install CRDs with local webhook configuration into the K8s cluster specified in ~/.kube/config.
 	export CA_BUNDLE=$(CA_ROOT) && $(KUSTOMIZE) build config/local | envsubst | kubectl apply --server-side --force-conflicts -f -
 
 .PHONY: uninstall
