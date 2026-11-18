@@ -19,7 +19,7 @@ jobs:
       github.event.comment.user.type == 'Bot'
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: read
+      pull-requests: write
       issues: write
     steps:
       - name: Evaluate verdict and changed files
