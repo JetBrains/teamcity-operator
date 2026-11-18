@@ -62,6 +62,7 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_ingress.yaml` | Headless Service + Ingress |
 | `_v1beta1_teamcity_with_serviceaccount.yaml` | Dedicated ServiceAccount |
 | `_v1beta1_teamcity_with_init_containers.yaml` | Custom init containers |
+| `_v1beta1_teamcity_with_stop_wait_time.yaml` | Graceful stop wait time (`spec.stopWaitTimeSeconds`) |
 | `_v1beta1_teamcity_with_node_selector.yaml` | Node selector |
 | `_v1beta1_teamcity_with_affinity.yaml` | Pod affinity |
 | `_v1beta1_teamcity_with_service.yaml` | Headless Service + `serviceName` (new deployment) |
@@ -333,6 +334,19 @@ spec:
         requests:
           storage: 1Gi
 ```
+
+### Graceful stop wait time
+
+`spec.stopWaitTimeSeconds` (default `60`, between `1` and `86400`) is how long a node gets to stop gracefully before the JVM is killed. The operator passes it to every node as `TEAMCITY_STOP_WAIT_TIME` and sets the pod `terminationGracePeriodSeconds` 30 seconds above it, so Kubernetes does not kill the pod mid-stop.
+
+```yaml
+spec:
+  stopWaitTimeSeconds: 120  # terminationGracePeriodSeconds becomes 150
+```
+
+Full sample: `config/samples/v1beta1/_v1beta1_teamcity_with_stop_wait_time.yaml`.
+
+Upgrade note: operator versions that introduce this field also drop the `preStop` hook from the server container and set `terminationGracePeriodSeconds` (previously the Kubernetes default of 30). The pod template of every node changes, so upgrading the operator restarts all nodes (through the zero-downtime flow when the `update-policy` annotation enables it). If you set `TEAMCITY_STOP_WAIT_TIME` in a node's `env`, move the value to `spec.stopWaitTimeSeconds`: the field overrides it, and the webhook warns about it.
 
 ### Multi-node: Main Node with one Secondary TeamCity Node without responsibilities
 

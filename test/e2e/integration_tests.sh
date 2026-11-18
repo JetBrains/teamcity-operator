@@ -875,6 +875,31 @@ test_with_node_volume_claims_adopt() {
   cleanup_namespace "${ns}"
 }
 
+# --- 18. TeamCity with a custom stop wait time ------------------------------
+test_with_stop_wait_time() {
+  local ns="test-stop-wait-time"
+  create_namespace "${ns}"
+
+  apply_sample "${samplesdir}/_v1beta1_teamcity_with_stop_wait_time.yaml" "${ns}"
+  wait_for_statefulsets "${ns}" 1
+
+  verify_resource_exists "${ns}" statefulset 1
+
+  local stop_wait grace
+  stop_wait=$("${KUBECTL}" get statefulset main-node -n "${ns}" \
+    -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="TEAMCITY_STOP_WAIT_TIME")].value}' \
+    2>/dev/null)
+  grace=$("${KUBECTL}" get statefulset main-node -n "${ns}" \
+    -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}' 2>/dev/null)
+  if [ "${stop_wait}" != "120" ] || [ "${grace}" != "150" ]; then
+    echo_error "StatefulSet main-node: TEAMCITY_STOP_WAIT_TIME='${stop_wait}', terminationGracePeriodSeconds='${grace}', expected 120 and 150"
+  fi
+  echo_info "  sts/main-node TEAMCITY_STOP_WAIT_TIME=120, terminationGracePeriodSeconds=150"
+  echo_step_completed
+
+  cleanup_namespace "${ns}"
+}
+
 # ========================== Main ============================================
 
 check_prerequisites
@@ -908,5 +933,6 @@ run_test test_with_node_data_dir
 run_test test_with_node_data_dir_adopt
 run_test test_with_custom_mounts
 run_test test_with_node_volume_claims_adopt
+run_test test_with_stop_wait_time
 
 echo_success "All integration tests passed!"
