@@ -104,6 +104,7 @@ jobs:
           TEAMCITY_SERVER_URL: ${{ vars.TEAMCITY_SERVER_URL }}
           TEAMCITY_PIPELINE_ID: ${{ vars.TEAMCITY_PIPELINE_ID }}
           TEAMCITY_TOKEN: ${{ secrets.TEAMCITY_TOKEN }}
+          TEAMCITY_VCS_ROOT_ID: ${{ vars.TEAMCITY_VCS_ROOT_ID || 'TeamCityOperatorBuilds_TeamCityOperatorVCSRoot' }}
         run: |
           set -euo pipefail
           HEAD_SHA=$(gh api "repos/$REPO/pulls/$PR_NUM" --jq .head.sha)
@@ -111,7 +112,13 @@ jobs:
 
           BASE="${TEAMCITY_SERVER_URL%/}"
           BODY=$(jq -n --arg id "$TEAMCITY_PIPELINE_ID" --arg branch "pull/$PR_NUM" --arg sha "$SHA" \
-            '{ buildType: { id: $id }, branchName: $branch, comment: { text: ("Auto-triggered by Air verdict for " + $sha) } }')
+            --arg vcsBranch "refs/pull/$PR_NUM/head" --arg root "$TEAMCITY_VCS_ROOT_ID" \
+            '{ buildType: { id: $id },
+               branchName: $branch,
+               revisions: { failOnMissingRevisions: true,
+                            revision: [ { version: $sha, vcsBranchName: $vcsBranch, "vcs-root-instance": { "vcs-root-id": $root } } ] },
+               properties: { property: [ { name: "expected.sha", value: $sha } ] },
+               comment: { text: ("Auto-triggered by Air verdict for " + $sha) } }')
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
             -H "Content-Type: application/json" -H "Accept: application/json" \
             -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
