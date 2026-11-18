@@ -1,0 +1,142 @@
+name: Trigger TeamCity from Air verdict
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: air-verdict-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Check Air verdict and trigger TeamCity
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.login == 'jetbrains-air[bot]' &&
+      github.event.comment.user.type == 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Evaluate verdict and changed files
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          reject() {
+            SAFE=$(printf '%s' "$1" | tr -c 'A-Za-z0-9 ._/:,()-' '_' | cut -c1-200)
+            {
+              echo "reason=$SAFE"
+              echo "sha="
+              echo "allowed=false"
+            } >> "$GITHUB_OUTPUT"
+            echo "Not triggered: $SAFE" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+
+          COUNT=$(printf '%s' "$BODY" | grep -o 'air-verdict' | wc -l | tr -d ' ')
+          [ "$COUNT" = "1" ] || reject "expected exactly one air-verdict marker, found $COUNT"
+
+          VERDICT=$(printf '%s' "$BODY" | grep -oP '<!-- air-verdict: \K\{.*?\}(?= -->)' || true)
+          [ -n "$VERDICT" ] || reject "air-verdict marker is malformed"
+          echo "$VERDICT" | jq -e . >/dev/null 2>&1 || reject "air-verdict is not valid JSON"
+
+          RISK=$(echo "$VERDICT" | jq -r '.risk // empty')
+          SHA=$(echo "$VERDICT" | jq -r '.sha // empty')
+          SCEN_C=$(echo "$VERDICT" | jq -r '.scenario_c // empty')
+          INJECTION=$(echo "$VERDICT" | jq -r '.injection')
+          FINDINGS=$(echo "$VERDICT" | jq -r '.security_findings // empty')
+
+          [ "$RISK" = "low" ] || reject "risk is '$RISK', not low"
+          [ "$INJECTION" = "false" ] || reject "prompt injection reported"
+          [ "$FINDINGS" = "0" ] || reject "security findings: $FINDINGS"
+          [ "$SCEN_C" = "no-restart" ] || reject "scenario C is '$SCEN_C'"
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || reject "verdict SHA is not a full commit SHA"
+
+          PR=$(gh api "repos/$REPO/pulls/$PR_NUM")
+          HEAD_SHA=$(echo "$PR" | jq -r .head.sha)
+          STATE=$(echo "$PR" | jq -r .state)
+          DRAFT=$(echo "$PR" | jq -r .draft)
+          [ "$STATE" = "open" ] || reject "PR is $STATE"
+          [ "$DRAFT" = "false" ] || reject "PR is a draft"
+          [ "$HEAD_SHA" = "$SHA" ] || reject "PR head moved: reviewed $SHA, head is $HEAD_SHA"
+
+          FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUM/files" --jq '.[] | @base64')
+          SENSITIVE='^(Makefile|Dockerfile|\.dockerignore|go\.mod|go\.sum|get_helm\.sh|PROJECT|\.github/|\.teamcity/|hack/|test/|config/rbac/|config/default/|config/manager/|charts/|bundle/)'
+          while read -r ENTRY; do
+            [ -n "$ENTRY" ] || continue
+            FILE=$(echo "$ENTRY" | base64 -d | jq -r .filename)
+            PREV=$(echo "$ENTRY" | base64 -d | jq -r '.previous_filename // empty')
+            PATCH=$(echo "$ENTRY" | base64 -d | jq -r '.patch // empty')
+            for P in "$FILE" "$PREV"; do
+              [ -n "$P" ] || continue
+              if [[ "$P" =~ $SENSITIVE ]]; then reject "touches build/CI/deps/RBAC path $P"; fi
+            done
+            if printf '%s' "$PATCH" | grep -q 'kubebuilder:rbac'; then reject "changes RBAC markers in $FILE"; fi
+            if [ -z "$PATCH" ] && [ "$(echo "$ENTRY" | base64 -d | jq -r .status)" != "removed" ]; then
+              reject "binary or oversized diff in $FILE needs human review"
+            fi
+          done <<< "$FILES"
+
+          {
+            echo "sha=$SHA"
+            echo "allowed=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Re-check head and queue TeamCity build
+        if: steps.gate.outputs.allowed == 'true'
+        id: trigger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          SHA: ${{ steps.gate.outputs.sha }}
+          TEAMCITY_SERVER_URL: ${{ vars.TEAMCITY_SERVER_URL }}
+          TEAMCITY_PIPELINE_ID: ${{ vars.TEAMCITY_PIPELINE_ID }}
+          TEAMCITY_TOKEN: ${{ secrets.TEAMCITY_TOKEN }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(gh api "repos/$REPO/pulls/$PR_NUM" --jq .head.sha)
+          [ "$HEAD_SHA" = "$SHA" ] || { echo "::error::PR head moved to $HEAD_SHA after the verdict"; exit 1; }
+
+          BASE="${TEAMCITY_SERVER_URL%/}"
+          BODY=$(jq -n --arg id "$TEAMCITY_PIPELINE_ID" --arg branch "pull/$PR_NUM" --arg sha "$SHA" \
+            '{ buildType: { id: $id }, branchName: $branch, comment: { text: ("Auto-triggered by Air verdict for " + $sha) } }')
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
+            -H "Content-Type: application/json" -H "Accept: application/json" \
+            -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          JSON=$(echo "$RESPONSE" | sed '$d')
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || { echo "::error::TeamCity returned HTTP $HTTP_CODE"; exit 1; }
+          BUILD_ID=$(echo "$JSON" | jq -r '.id // empty')
+          [ -n "$BUILD_ID" ] || { echo "::error::No build id in TeamCity response"; exit 1; }
+          echo "build_url=$BASE/viewLog.html?buildId=$BUILD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Report outcome on the PR
+        if: always() && steps.gate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number }}
+          ALLOWED: ${{ steps.gate.outputs.allowed }}
+          REASON: ${{ steps.gate.outputs.reason }}
+          SHA: ${{ steps.gate.outputs.sha }}
+          BUILD_URL: ${{ steps.trigger.outputs.build_url }}
+        run: |
+          set -euo pipefail
+          if [ "$ALLOWED" = "true" ] && [ -n "$BUILD_URL" ]; then
+            MSG="TeamCity tests queued automatically for \`$SHA\` after a clean Air pre-review: $BUILD_URL"
+          elif [ "$ALLOWED" = "true" ]; then
+            MSG="Air pre-review was clean, but queuing TeamCity failed. A maintainer needs to start the tests manually."
+          else
+            MSG="Tests were not started automatically: $REASON. A maintainer will review and start them manually."
+          fi
+          gh api "repos/$REPO/issues/$PR_NUM/comments" -f body="$MSG" >/dev/null
