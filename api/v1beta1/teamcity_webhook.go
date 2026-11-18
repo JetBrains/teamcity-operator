@@ -136,6 +136,23 @@ func hostPathVolumeWarnings(teamcity *TeamCity) admission.Warnings {
 	return warnings
 }
 
+func stopWaitTimeEnvWarnings(teamcity *TeamCity) admission.Warnings {
+	var warnings admission.Warnings
+	nodes := append([]Node{teamcity.Spec.MainNode}, teamcity.Spec.SecondaryNodes...)
+	paths := nodeObjectPaths(teamcity)
+	for nodeIdx, node := range nodes {
+		for idx, env := range node.Spec.Env {
+			if env.Name != "TEAMCITY_STOP_WAIT_TIME" {
+				continue
+			}
+			warnings = append(warnings, fmt.Sprintf(
+				"%s.spec.env[%d] sets TEAMCITY_STOP_WAIT_TIME, which the operator overrides with teamcity.spec.stopWaitTimeSeconds (%d): set that field instead",
+				paths[nodeIdx], idx, teamcity.StopWaitTime()))
+		}
+	}
+	return warnings
+}
+
 func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateRequestsOfAllNodes(teamcity); err != nil {
 		return nil, err
@@ -146,7 +163,7 @@ func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateAllCustomPersistentVolumeClaimsInObject(teamcity); err != nil {
 		return nil, err
 	}
-	warnings := hostPathVolumeWarnings(teamcity)
+	warnings := append(hostPathVolumeWarnings(teamcity), stopWaitTimeEnvWarnings(teamcity)...)
 	if responsibilityWarning, err := validateResponsibilitiesOfAllNodes(teamcity); err != nil || responsibilityWarning != "" {
 		return append(warnings, responsibilityWarning), err
 	}

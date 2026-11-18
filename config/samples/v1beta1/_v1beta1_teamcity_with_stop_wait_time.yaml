@@ -1,0 +1,35 @@
+# TeamCity with a custom graceful stop wait time.
+#
+# spec.stopWaitTimeSeconds is passed to every node as TEAMCITY_STOP_WAIT_TIME,
+# the time the server gets to stop gracefully before the JVM is killed. The pod
+# terminationGracePeriodSeconds is set 30 seconds above it (150 here).
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_stop_wait_time.yaml
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-with-stop-wait-time
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  stopWaitTimeSeconds: 120
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "900m"
+        memory: "1512Mi"
+  dataDirVolumeClaim:
+    name: teamcity-data-dir
+    volumeMount:
+      name: teamcity-data-dir
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
