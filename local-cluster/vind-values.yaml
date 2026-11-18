@@ -1,0 +1,20 @@
+# vind (vCluster in Docker) values for the local simulation environment.
+#
+# vind runs Kubernetes as plain Docker containers: one control plane plus the
+# worker nodes below. Its pull-through registry proxy (enabled by default)
+# lets pods pull images straight from the host Docker daemon, so locally built
+# images work without pushing them anywhere.
+#
+# vind's automatic LoadBalancer forwarding requires creating the cluster with
+# sudo, which is not practical for a dev environment, so instead Traefik runs
+# as NodePort service. The workers publish 8111 -> the node port below, which
+# routes to Traefik's web entrypoint on port 8111.
+experimental:
+  docker:
+    nodes:
+      - name: worker-1
+        ports:
+          - "8111:31811"
+      - name: worker-2
+      - name: worker-3
+      - name: worker-4

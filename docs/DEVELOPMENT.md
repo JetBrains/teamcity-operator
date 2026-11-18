@@ -105,3 +105,27 @@ make test # finds all test files and runs ginkgo tests
 ```shell
 make deploy # installs controller to the selected kube context
 ```
+
+## Local cluster simulation
+
+The repository ships a local environment for trying out the operator and simulating a multi-node TeamCity, driven by [Tilt](https://tilt.dev) on a [vind](https://github.com/loft-sh/vind) cluster (vCluster in Docker).
+
+First create the cluster and the kubeconfig Tilt will use:
+
+```shell
+scripts/local-cluster.sh
+```
+
+Then start everything (the first run takes several minutes):
+
+```shell
+KUBECONFIG=.tilt-kubeconfig tilt up
+```
+
+Tilt builds the operator image from the current source tree (pods pull it straight from the host Docker daemon, no registry setup needed), installs cert-manager, Traefik and the Percona PostgreSQL operator from OCI Helm charts, creates a two-instance Postgres cluster with a PgBouncer pool, deploys the operator from the chart in this repository, and creates a multi-node TeamCity instance backed by the database.
+
+TeamCity is reachable at `http://teamcity.local:8111` (add `127.0.0.1 teamcity.local` to `/etc/hosts` if the domain does not resolve). On first boot, the TeamCity license has to be accepted in the UI before the server finishes starting.
+
+Tilt watches the source tree: changing the Go code or the chart rebuilds and redeploys automatically. When the cluster's images fail to pull on Linux with `too many open files`, raise the inotify limit used by containerd (for example `colima ssh -- sudo sysctl -w fs.inotify.max_user_instances=1024`).
+
+Teardown: `tilt down` stops Tilt, and `scripts/local-cluster.sh --delete` removes the cluster.

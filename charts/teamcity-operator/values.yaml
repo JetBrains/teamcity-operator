@@ -1,3 +1,5 @@
+# Optional image pull secrets for the operator deployment.
+imagePullSecrets: []
 controllerManager:
   kubeRbacProxy:
     args:

@@ -1,0 +1,11 @@
+# Traefik is published through the NodePort that vind maps on worker-1
+# (8111 -> 31811), so TeamCity is reachable at http://teamcity.local:8111.
+# The chart creates the default IngressClass, so the TeamCity Ingress needs
+# no explicit ingressClassName.
+service:
+  spec:
+    type: NodePort
+ports:
+  web:
+    port: 8111
+    nodePort: 31811

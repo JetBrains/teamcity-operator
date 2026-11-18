@@ -1,0 +1,32 @@
+# PerconaPGCluster values for the local simulation: 2 Postgres instances
+# behind 1 PgBouncer, no backups and no log collector to keep it light.
+crVersion: 3.1.0
+postgresVersion: 18
+instances:
+  - name: instance1
+    replicas: 2
+    dataVolumeClaimSpec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+proxy:
+  pgBouncer:
+    replicas: 1
+backups:
+  enabled: false
+logcollector:
+  enabled: false
+# The operator creates the role from the secret holding only the 'password'
+# key (prerequisite-secrets.yaml) and enriches it with connection details.
+# The role must not be SUPERUSER: pgBouncer's auth lookup refuses to
+# authenticate superusers.
+users:
+  - name: teamcity
+    databases:
+      - teamcity
+    grantPublicSchemaAccess: true
+    password:
+      type: ASCII
+    secretName: teamcity-pg-credentials

@@ -3,4 +3,5 @@
 !/.idea/runConfigurations
 cover.out
 report.out
+.tilt-kubeconfig
 /certs

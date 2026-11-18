@@ -1,0 +1,3 @@
+# Percona Operator for PostgreSQL values for the local simulation.
+disableTelemetry: true
+watchAllNamespaces: true
