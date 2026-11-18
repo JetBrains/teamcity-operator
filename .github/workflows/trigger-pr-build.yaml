@@ -85,10 +85,22 @@ jobs:
                revisions: { failOnMissingRevisions: true,
                             revision: [ { version: $sha, vcsBranchName: $vcsBranch, "vcs-root-instance": { "vcs-root-id": $root } } ] },
                properties: { property: [ { name: "expected.sha", value: $sha } ] } }')
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
-            -H "Content-Type: application/json" -H "Accept: application/json" \
-            -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          for ATTEMPT in 1 2 3 4; do
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
+              -H "Content-Type: application/json" -H "Accept: application/json" \
+              -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            case "$HTTP_CODE" in
+              000|429|5??)
+                if [ "$ATTEMPT" -lt 4 ]; then
+                  echo "TeamCity returned HTTP $HTTP_CODE, retrying in $((ATTEMPT * 15))s"
+                  sleep $((ATTEMPT * 15))
+                  continue
+                fi
+                ;;
+            esac
+            break
+          done
           BODY_JSON=$(echo "$RESPONSE" | sed '$d')
 
           [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || {

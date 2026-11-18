@@ -119,12 +119,24 @@ jobs:
                             revision: [ { version: $sha, vcsBranchName: $vcsBranch, "vcs-root-instance": { "vcs-root-id": $root } } ] },
                properties: { property: [ { name: "expected.sha", value: $sha } ] },
                comment: { text: ("Auto-triggered by Air verdict for " + $sha) } }')
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
-            -H "Content-Type: application/json" -H "Accept: application/json" \
-            -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          for ATTEMPT in 1 2 3 4; do
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \
+              -H "Content-Type: application/json" -H "Accept: application/json" \
+              -H "Authorization: Bearer $TEAMCITY_TOKEN" -d "$BODY")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            case "$HTTP_CODE" in
+              000|429|5??)
+                if [ "$ATTEMPT" -lt 4 ]; then
+                  echo "TeamCity returned HTTP $HTTP_CODE, retrying in $((ATTEMPT * 15))s"
+                  sleep $((ATTEMPT * 15))
+                  continue
+                fi
+                ;;
+            esac
+            break
+          done
           JSON=$(echo "$RESPONSE" | sed '$d')
-          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || { echo "::error::TeamCity returned HTTP $HTTP_CODE"; exit 1; }
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || { echo "::error::TeamCity returned HTTP $HTTP_CODE"; echo "$JSON" | head -c 1000; exit 1; }
           BUILD_ID=$(echo "$JSON" | jq -r '.id // empty')
           [ -n "$BUILD_ID" ] || { echo "::error::No build id in TeamCity response"; exit 1; }
           echo "build_url=$BASE/viewLog.html?buildId=$BUILD_ID" >> "$GITHUB_OUTPUT"
