@@ -72,7 +72,7 @@ jobs:
           [ "$HEAD_SHA" = "$SHA" ] || reject "PR head moved: reviewed $SHA, head is $HEAD_SHA"
 
           FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUM/files" --jq '.[] | @base64')
-          SENSITIVE='^(Makefile|Dockerfile|\.dockerignore|go\.mod|go\.sum|get_helm\.sh|PROJECT|\.github/|\.teamcity/|hack/|test/|config/rbac/|config/default/|config/manager/|charts/|bundle/)'
+          SENSITIVE='^(\.air/|Makefile|Dockerfile|\.dockerignore|go\.mod|go\.sum|get_helm\.sh|PROJECT|\.github/|\.teamcity/|hack/|test/|config/rbac/|config/default/|config/manager/|charts/|bundle/)'
           while read -r ENTRY; do
             [ -n "$ENTRY" ] || continue
             FILE=$(echo "$ENTRY" | base64 -d | jq -r .filename)
