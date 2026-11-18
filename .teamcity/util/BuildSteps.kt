@@ -17,10 +17,4 @@ object BuildSteps {
         echo "##teamcity[setParameter name='predicted_version' value='${'$'}VERSION_WITH_SUFFIX']"
     """.trimIndent()
 
-    fun runTestsScriptContent(): String = """
-        go version
-        go install github.com/onsi/ginkgo/v2/ginkgo
-        make test
-        cat report.out
-    """.trimIndent()
 }

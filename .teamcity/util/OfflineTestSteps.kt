@@ -5,7 +5,7 @@ object OfflineTestSteps {
     const val hermetoImage =
         "ghcr.io/hermetoproject/hermeto@sha256:b941a5258887a47deb3d741fa4a3183ec7ec3a99c1c4d0be9aa10c1d15fe0b9a"
     const val goImage =
-        "golang@sha256:7b297d9abee021bab9046e492506b3c2da8a3722cbf301653186545ecc1e00bb"
+        "golang@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea"
 
     private const val envtestVersion = "1.26.0"
     private const val envtestSha512Amd64 =

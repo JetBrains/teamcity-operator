@@ -3,10 +3,12 @@ package builds
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import consts.dockerImageName
 import jetbrains.buildServer.configs.kotlin.BuildType
+import jetbrains.buildServer.configs.kotlin.CheckoutMode
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import util.BuildSteps
+import util.OfflineTestSteps
 
 object PrepareRelease : BuildType({
     name = "Prepare Release"
@@ -14,6 +16,7 @@ object PrepareRelease : BuildType({
 
     vcs {
         root(TeamCityOperatorVCSRoot)
+        checkoutMode = CheckoutMode.ON_AGENT
     }
 
     steps {
@@ -23,10 +26,14 @@ object PrepareRelease : BuildType({
             scriptContent = BuildSteps.predictTagScriptContent()
         }
         script {
-            name = "Run tests"
+            name = "Prefetch dependencies (Hermeto)"
+            id = "Prefetch_dependencies"
+            scriptContent = OfflineTestSteps.prefetchScriptContent()
+        }
+        script {
+            name = "Run tests offline"
             id = "Run_tests"
-            scriptContent = BuildSteps.runTestsScriptContent()
-            dockerImage = "golang:1.22.0"
+            scriptContent = OfflineTestSteps.offlineTestScriptContent()
         }
     }
 
