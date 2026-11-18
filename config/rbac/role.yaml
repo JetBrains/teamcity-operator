@@ -5,21 +5,12 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
+  - persistentvolumeclaims
+  - serviceaccounts
+  - services
   verbs:
   - create
   - delete
@@ -36,33 +27,9 @@ rules:
   - create
   - patch
 - apiGroups:
-  - ""
+  - apps
   resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
+  - statefulsets
   verbs:
   - create
   - delete

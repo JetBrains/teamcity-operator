@@ -8,7 +8,7 @@ If this is the first time opening this project in your IDE, make sure that Go mo
 
 Required Go version:
 ```
-go version go1.20.4
+go version go1.27.4
 ```
 
 Required version of minikube (if you use minikube for local testing). See the official docs for setup: https://minikube.sigs.k8s.io/docs/start/
