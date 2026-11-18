@@ -49,16 +49,18 @@ jobs:
           [ -n "$VERDICT" ] || reject "air-verdict marker is malformed"
           echo "$VERDICT" | jq -e . >/dev/null 2>&1 || reject "air-verdict is not valid JSON"
 
-          RISK=$(echo "$VERDICT" | jq -r '.risk // empty')
+          SEC_RISK=$(echo "$VERDICT" | jq -r '.security_risk // empty')
+          IMPACT=$(echo "$VERDICT" | jq -r '.upgrade_impact // empty')
           SHA=$(echo "$VERDICT" | jq -r '.sha // empty')
-          SCEN_C=$(echo "$VERDICT" | jq -r '.scenario_c // empty')
           INJECTION=$(echo "$VERDICT" | jq -r '.injection')
           FINDINGS=$(echo "$VERDICT" | jq -r '.security_findings // empty')
 
-          [ "$RISK" = "low" ] || reject "risk is '$RISK', not low"
+          [ -n "$SEC_RISK" ] || reject "verdict has no security_risk field (Air prompt is out of date)"
+          [[ "$IMPACT" =~ ^(none|restart|breaking|unclear)$ ]] || reject "verdict has no valid upgrade_impact field (Air prompt is out of date)"
+          echo "impact=$IMPACT" >> "$GITHUB_OUTPUT"
+          [ "$SEC_RISK" = "low" ] || reject "security risk is $SEC_RISK, not low"
           [ "$INJECTION" = "false" ] || reject "prompt injection reported"
           [ "$FINDINGS" = "0" ] || reject "security findings: $FINDINGS"
-          [ "$SCEN_C" = "no-restart" ] || reject "scenario C is '$SCEN_C'"
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || reject "verdict SHA is not a full commit SHA"
 
           PR=$(gh api "repos/$REPO/pulls/$PR_NUM")
@@ -129,6 +131,7 @@ jobs:
           ALLOWED: ${{ steps.gate.outputs.allowed }}
           REASON: ${{ steps.gate.outputs.reason }}
           SHA: ${{ steps.gate.outputs.sha }}
+          IMPACT: ${{ steps.gate.outputs.impact }}
           BUILD_URL: ${{ steps.trigger.outputs.build_url }}
         run: |
           set -euo pipefail
@@ -139,4 +142,10 @@ jobs:
           else
             MSG="Tests were not started automatically: $REASON. A maintainer will review and start them manually."
           fi
+          case "$IMPACT" in
+            none) MSG="$MSG"$'\n\n'"Upgrade impact: none." ;;
+            restart) MSG="$MSG"$'\n\n'"Upgrade impact: **restart**. Existing TeamCity nodes restart when the operator is upgraded; this must be called out in the release notes." ;;
+            breaking) MSG="$MSG"$'\n\n'"Upgrade impact: **breaking**. Existing installations need a manual step or break; this needs a migration note and maintainer sign-off." ;;
+            unclear) MSG="$MSG"$'\n\n'"Upgrade impact: unclear. A maintainer needs to check what happens to existing installations." ;;
+          esac
           gh api "repos/$REPO/issues/$PR_NUM/comments" -f body="$MSG" >/dev/null
