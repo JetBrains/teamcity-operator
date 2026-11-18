@@ -48,6 +48,16 @@ func DefaultEnvironmentVariableBuilder(nodeName string, xmxValue string, dataDir
 		LogDirPathEnvVar(dataDirPath),
 		ServerMemOptsEnvVar(xmxValue),
 		ServerOptsEnvVar(dataDirPath, nodeName, extraServerOpts),
+		GracefulShutdownEnvVar(),
+	}
+}
+
+const DefaultGracefulShutdownSeconds = "120"
+
+func GracefulShutdownEnvVar() v12.EnvVar {
+	return v12.EnvVar{
+		Name:  "TEAMCITY_GRACEFUL_SHUTDOWN_SECONDS",
+		Value: DefaultGracefulShutdownSeconds,
 	}
 }
 

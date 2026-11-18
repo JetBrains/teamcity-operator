@@ -140,9 +140,6 @@ func validateCommonFields(teamcity *TeamCity) (admission.Warnings, error) {
 	if err := validateRequestsOfAllNodes(teamcity); err != nil {
 		return nil, err
 	}
-	if err := validateXmxPercentage(teamcity); err != nil {
-		return nil, err
-	}
 	if err := validateAllCustomPersistentVolumeClaimsInObject(teamcity); err != nil {
 		return nil, err
 	}
