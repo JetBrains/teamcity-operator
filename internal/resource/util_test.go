@@ -17,5 +17,13 @@ var _ = Describe("Util", func() {
 			sortedKeys := SortKeysAlphabeticallyInMap(testMap)
 			Expect(expected).To(Equal(sortedKeys))
 		})
+		It("returns an empty slice for an empty map", func() {
+			sortedKeys := SortKeysAlphabeticallyInMap(map[string]string{})
+			Expect(sortedKeys).To(BeEmpty())
+		})
+		It("returns an empty slice for a nil map", func() {
+			sortedKeys := SortKeysAlphabeticallyInMap(nil)
+			Expect(sortedKeys).To(BeEmpty())
+		})
 	})
 })

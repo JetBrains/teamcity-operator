@@ -57,7 +57,7 @@ This will place a few files in `certs` directory.
 
 ```
 ├── api
-│   └── v1alpha1 # structs that represent CRDs. run `make generate` to generate YAML CRDs into config/crd/bases
+│   └── v1beta1 # structs that represent CRDs. run `make manifests` to generate YAML CRDs into config/crd/bases
 ├── bin 
 │   └── k8s
 │       └── 1.26.0-darwin-arm64 # results of `make build`
