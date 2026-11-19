@@ -5,9 +5,13 @@ on:
     tags:
       - '*.*.*'
 
+permissions: {}
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Ensure tag is semver
         run: |
@@ -19,17 +23,17 @@ jobs:
           echo "Tag '$TAG' is valid semver."
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
         with:
           version: 'v3.14.0'
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
 
@@ -45,7 +49,7 @@ jobs:
           helm package ./charts/teamcity-operator --version "$VERSION"
 
       - name: Create release with notes and attach Helm package
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
