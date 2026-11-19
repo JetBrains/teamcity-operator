@@ -64,6 +64,9 @@ var _ = BeforeSuite(func() {
 	}
 
 	testEnv.ControlPlane.GetAPIServer().Configure().Set("advertise-address", "127.0.0.1")
+	testEnv.ControlPlane.GetAPIServer().Configure().Set("endpoint-reconciler-type", "none")
+
+	testEnv.ControlPlane.GetAPIServer().Configure().Set("endpoint-reconciler-type", "none")
 
 	var err error
 	// cfg is defined in this file globally.
