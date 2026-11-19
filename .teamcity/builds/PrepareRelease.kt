@@ -27,6 +27,11 @@ object PrepareRelease : BuildType({
             onDependencyCancel = FailureAction.FAIL_TO_START
             reuseBuilds = ReuseBuilds.NO
         }
+        snapshot(E2eMatrix) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+            onDependencyCancel = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.NO
+        }
     }
 
     steps {

@@ -1,5 +1,6 @@
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import builds.BuildDockerImages
+import builds.E2eMatrix
 import builds.FinalizeRelease
 import builds.PrepareRelease
 import builds.SecurityChecks
@@ -19,6 +20,7 @@ project {
     buildType(BuildDockerImages)
     buildType(FinalizeRelease)
     buildType(TestBuild)
+    buildType(E2eMatrix)
 
     features {
         dockerRegistry {

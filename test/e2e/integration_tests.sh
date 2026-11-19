@@ -212,7 +212,7 @@ apply_sample_with_db() {
 wait_for_statefulsets() {
   local ns="$1"
   local expected="${2:-1}"
-  local timeout="${3:-180}"
+  local timeout="${3:-${STS_TIMEOUT:-180}}"
   local elapsed=0
 
   echo_info "  waiting for ${expected} StatefulSet(s) in ${ns}"

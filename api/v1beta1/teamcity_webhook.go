@@ -63,7 +63,19 @@ var _ webhook.Defaulter = &TeamCity{}
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (instance *TeamCity) Default() {
 	teamcitylog.Info("default", "name", instance.Name)
+	defaultVolumeMountNames(instance.Spec.Volumes)
+	defaultVolumeMountNames(instance.Spec.MainNode.Spec.Volumes)
+	for idx := range instance.Spec.SecondaryNodes {
+		defaultVolumeMountNames(instance.Spec.SecondaryNodes[idx].Spec.Volumes)
+	}
+}
 
+func defaultVolumeMountNames(volumes []TeamCityVolume) {
+	for idx := range volumes {
+		if volumes[idx].Mount != nil && volumes[idx].Mount.Name == "" {
+			volumes[idx].Mount.Name = volumes[idx].Name
+		}
+	}
 }
 
 //+kubebuilder:webhook:path=/validate-jetbrains-com-v1beta1-teamcity,mutating=false,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=vv1beta1teamcity.kb.io,admissionReviewVersions=v1
