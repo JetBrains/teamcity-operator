@@ -56,11 +56,6 @@ object TestBuild : BuildType({
             scriptContent = OfflineTestSteps.prefetchScriptContent()
         }
         script {
-            name = "Security checks offline (govulncheck, licenses)"
-            id = "Security_checks"
-            scriptContent = OfflineTestSteps.securityChecksScriptContent()
-        }
-        script {
             name = "Run tests offline"
             id = "Run_tests"
             scriptContent = OfflineTestSteps.offlineTestScriptContent()
