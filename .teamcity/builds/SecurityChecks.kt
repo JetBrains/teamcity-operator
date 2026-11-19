@@ -23,7 +23,7 @@ object SecurityChecks : BuildType({
         checkoutMode = CheckoutMode.ON_AGENT
         branchFilter = """
             +:pull/*
-            +:refs/heads/main
+            +:<default>
         """.trimIndent()
     }
 
