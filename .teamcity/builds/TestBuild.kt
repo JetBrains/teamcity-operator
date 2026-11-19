@@ -3,6 +3,8 @@ package builds
 import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import jetbrains.buildServer.configs.kotlin.BuildType
 import jetbrains.buildServer.configs.kotlin.CheckoutMode
+import jetbrains.buildServer.configs.kotlin.FailureAction
+import jetbrains.buildServer.configs.kotlin.ReuseBuilds
 import jetbrains.buildServer.configs.kotlin.buildFeatures.PullRequests
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
@@ -29,6 +31,14 @@ object TestBuild : BuildType({
         """.trimIndent()
     }
 
+    dependencies {
+        snapshot(SecurityChecks) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+            onDependencyCancel = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.NO
+        }
+    }
+
     steps {
         script {
             name = "Verify reviewed commit"
@@ -44,11 +54,6 @@ object TestBuild : BuildType({
             name = "Prefetch dependencies (Hermeto)"
             id = "Prefetch_dependencies"
             scriptContent = OfflineTestSteps.prefetchScriptContent()
-        }
-        script {
-            name = "Security checks offline (govulncheck, licenses)"
-            id = "Security_checks"
-            scriptContent = OfflineTestSteps.securityChecksScriptContent()
         }
         script {
             name = "Run tests offline"

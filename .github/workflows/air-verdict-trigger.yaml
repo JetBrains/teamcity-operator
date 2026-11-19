@@ -117,7 +117,8 @@ jobs:
                branchName: $branch,
                revisions: { failOnMissingRevisions: true,
                             revision: [ { version: $sha, vcsBranchName: $vcsBranch, "vcs-root-instance": { "vcs-root-id": $root } } ] },
-               properties: { property: [ { name: "expected.sha", value: $sha } ] },
+               properties: { property: [ { name: "expected.sha", value: $sha },
+                                        { name: "reverse.dep.*.expected.sha", value: $sha } ] },
                comment: { text: ("Auto-triggered by Air verdict for " + $sha) } }')
           for ATTEMPT in 1 2 3 4; do
             RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE/app/rest/buildQueue" \

@@ -4,6 +4,8 @@ import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import consts.dockerImageName
 import jetbrains.buildServer.configs.kotlin.BuildType
 import jetbrains.buildServer.configs.kotlin.CheckoutMode
+import jetbrains.buildServer.configs.kotlin.FailureAction
+import jetbrains.buildServer.configs.kotlin.ReuseBuilds
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
@@ -19,6 +21,14 @@ object PrepareRelease : BuildType({
         checkoutMode = CheckoutMode.ON_AGENT
     }
 
+    dependencies {
+        snapshot(SecurityChecks) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+            onDependencyCancel = FailureAction.FAIL_TO_START
+            reuseBuilds = ReuseBuilds.NO
+        }
+    }
+
     steps {
         script {
             name = "Predict tag"
@@ -29,11 +39,6 @@ object PrepareRelease : BuildType({
             name = "Prefetch dependencies (Hermeto)"
             id = "Prefetch_dependencies"
             scriptContent = OfflineTestSteps.prefetchScriptContent()
-        }
-        script {
-            name = "Security checks offline (govulncheck, licenses)"
-            id = "Security_checks"
-            scriptContent = OfflineTestSteps.securityChecksScriptContent()
         }
         script {
             name = "Run tests offline"

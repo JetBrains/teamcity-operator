@@ -2,6 +2,7 @@ import _Self.vcsRoots.TeamCityOperatorVCSRoot
 import builds.BuildDockerImages
 import builds.FinalizeRelease
 import builds.PrepareRelease
+import builds.SecurityChecks
 import builds.TestBuild
 import consts.dockerHubRegistryConnectionId
 import environment.EnvironmentProvider
@@ -13,6 +14,7 @@ version = "2025.11"
 project {
     vcsRoot(TeamCityOperatorVCSRoot)
 
+    buildType(SecurityChecks)
     buildType(PrepareRelease)
     buildType(BuildDockerImages)
     buildType(FinalizeRelease)

@@ -45,8 +45,8 @@ object OfflineTestSteps {
           aarch64|arm64) ARCH=arm64; SHA512=$envtestSha512Arm64 ;;
           *) echo "Unsupported agent architecture ${'$'}(uname -m)"; exit 1 ;;
         esac
-        rm -rf .hermeto-input .hermeto-output .hermeto.env .tools .vulndb
-        mkdir -p .hermeto-input .tools .vulndb
+        rm -rf .hermeto-input .hermeto-output .hermeto.env
+        mkdir -p .hermeto-input
         cat > .hermeto-input/artifacts.lock.yaml <<EOF
         metadata:
           version: "1.0"
@@ -62,6 +62,13 @@ object OfflineTestSteps {
         ${'$'}HERMETO generate-env /src/.hermeto-output -o /src/.hermeto.env --for-output-dir /src/.hermeto-output
         ${'$'}HERMETO inject-files /src/.hermeto-output --for-output-dir /src/.hermeto-output
         echo "##teamcity[publishArtifacts '.hermeto-output/bom.json => sbom']"
+    """.trimIndent()
+
+    fun fetchSecurityToolsScriptContent(): String = """
+        #!/usr/bin/env bash
+        set -euo pipefail
+        rm -rf .tools .vulndb .vulndb.zip
+        mkdir -p .tools .vulndb
         docker run --rm -v "${'$'}PWD/.tools:/out" -w /tmp -e GOBIN=/out -e GOTOOLCHAIN=local -e GOFLAGS= $goImage \
           sh -c 'go install golang.org/x/vuln/cmd/govulncheck@$govulncheckVersion && go install github.com/google/go-licenses/v2@$goLicensesVersion'
         curl -sSfL --retry 3 https://vuln.go.dev/vulndb.zip -o .vulndb.zip
