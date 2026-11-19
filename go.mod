@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/onsi/ginkgo/v2 v2.34.0
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/gomega v1.44.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	k8s.io/api v0.28.4
