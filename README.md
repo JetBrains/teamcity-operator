@@ -8,6 +8,8 @@ TeamCity Operator is a Kubernetes operator that deploys and manages TeamCity ser
 - Sample manifests: `config/samples/v1beta1` (see also `config/samples/teamcity_full.yaml`)
 - Annotations reference: see [Annotations](#annotations) below
 - Development guide: docs/DEVELOPMENT.md
+- Upgrade policy: [docs/UPGRADE-POLICY.md](docs/UPGRADE-POLICY.md)
+- Security policy and vulnerability reporting: [SECURITY.md](SECURITY.md)
 - Common questions: see [FAQ](#faq) below
 
 ## Installation
