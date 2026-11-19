@@ -7,7 +7,7 @@ toolchain go1.27.4
 require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.44.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
@@ -47,7 +47,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
