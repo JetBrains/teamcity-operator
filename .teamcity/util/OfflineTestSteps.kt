@@ -7,6 +7,10 @@ object OfflineTestSteps {
     const val goImage =
         "golang@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea"
 
+    private const val govulncheckVersion = "v1.10.0"
+    private const val goLicensesVersion = "v2.0.1"
+    private const val allowedLicenses = "Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC,MPL-2.0"
+
     private const val envtestVersion = "1.26.0"
     private const val envtestSha512Amd64 =
         "115275a461e5fb09515f4d87a12b07ccdf1662ed79a89af085ec965af1a2e9dd5ddcfa9399da0c409de29b7f2aede29d9af6cb91eeb80bebbeb09dc56a9ab36f"
@@ -41,8 +45,8 @@ object OfflineTestSteps {
           aarch64|arm64) ARCH=arm64; SHA512=$envtestSha512Arm64 ;;
           *) echo "Unsupported agent architecture ${'$'}(uname -m)"; exit 1 ;;
         esac
-        rm -rf .hermeto-input .hermeto-output .hermeto.env
-        mkdir -p .hermeto-input
+        rm -rf .hermeto-input .hermeto-output .hermeto.env .tools .vulndb
+        mkdir -p .hermeto-input .tools .vulndb
         cat > .hermeto-input/artifacts.lock.yaml <<EOF
         metadata:
           version: "1.0"
@@ -58,6 +62,41 @@ object OfflineTestSteps {
         ${'$'}HERMETO generate-env /src/.hermeto-output -o /src/.hermeto.env --for-output-dir /src/.hermeto-output
         ${'$'}HERMETO inject-files /src/.hermeto-output --for-output-dir /src/.hermeto-output
         echo "##teamcity[publishArtifacts '.hermeto-output/bom.json => sbom']"
+        docker run --rm -v "${'$'}PWD/.tools:/out" -w /tmp -e GOBIN=/out -e GOTOOLCHAIN=local -e GOFLAGS= $goImage \
+          sh -c 'go install golang.org/x/vuln/cmd/govulncheck@$govulncheckVersion && go install github.com/google/go-licenses/v2@$goLicensesVersion'
+        curl -sSfL --retry 3 https://vuln.go.dev/vulndb.zip -o .vulndb.zip
+        docker run --rm -v "${'$'}PWD:/src" -w /src $goImage python3 -m zipfile -e .vulndb.zip .vulndb
+        rm -f .vulndb.zip
+        echo "Go vulnerability database: ${'$'}(cat .vulndb/index/db.json)"
+    """.trimIndent()
+
+    fun securityChecksScriptContent(): String = """
+        #!/usr/bin/env bash
+        set -euo pipefail
+        cat > .security-checks.sh <<'EOF'
+        set -uo pipefail
+        if curl -sS --max-time 5 -o /dev/null https://proxy.golang.org 2>/dev/null; then
+          echo "##teamcity[buildProblem description='Network is reachable from the offline security check container']"
+          exit 1
+        fi
+        . ./.hermeto.env
+        export GOTOOLCHAIN=local GOFLAGS=-mod=mod
+        RC=0
+        echo "##teamcity[blockOpened name='govulncheck']"
+        if ! ./.tools/govulncheck -db file:///src/.vulndb -show verbose ./...; then
+          echo "##teamcity[buildProblem description='govulncheck found vulnerabilities reachable from the operator code']"
+          RC=1
+        fi
+        echo "##teamcity[blockClosed name='govulncheck']"
+        echo "##teamcity[blockOpened name='Dependency licenses']"
+        if ! ./.tools/go-licenses check ./... --allowed_licenses=$allowedLicenses; then
+          echo "##teamcity[buildProblem description='A dependency uses a license outside the allowed list']"
+          RC=1
+        fi
+        echo "##teamcity[blockClosed name='Dependency licenses']"
+        exit ${'$'}RC
+        EOF
+        docker run --rm --network=none -v "${'$'}PWD":/src -w /src $goImage bash /src/.security-checks.sh
     """.trimIndent()
 
     fun offlineTestScriptContent(): String = """
