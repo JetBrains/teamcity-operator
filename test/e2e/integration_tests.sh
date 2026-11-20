@@ -42,6 +42,11 @@ CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.14.3}"
 KUBECTL="${KUBECTL:-kubectl}"
 KIND="${KIND:-kind}"
 KUSTOMIZE="${projectdir}/bin/kustomize"
+READY_TIMEOUT="${READY_TIMEOUT:-900}"
+ZDU_TIMEOUT="${ZDU_TIMEOUT:-1800}"
+DELETE_TIMEOUT="${DELETE_TIMEOUT:-300}"
+ZDU_FROM_IMAGE="${ZDU_FROM_IMAGE:-jetbrains/teamcity-server:2026.2.1}"
+ZDU_TO_IMAGE="${ZDU_TO_IMAGE:-jetbrains/teamcity-server:2026.2.2}"
 
 # Base64 value of "jdbc:mysql://mysql.default:3306/teamcity" used in sample
 # files. Replaced per-namespace so that in-namespace MySQL is reachable.
@@ -235,6 +240,151 @@ wait_for_statefulsets() {
     sleep 5
     elapsed=$((elapsed + 5))
   done
+}
+
+dump_namespace_debug() {
+  local ns="$1"
+  echo_warn "--- Debug info for namespace ${ns} ---"
+  "${KUBECTL}" get teamcity,statefulset,pod,configmap -n "${ns}" -o wide 2>/dev/null || true
+  "${KUBECTL}" describe pods -n "${ns}" 2>/dev/null | tail -80 || true
+  local pod
+  for pod in $("${KUBECTL}" get pods -n "${ns}" -o name 2>/dev/null); do
+    echo "--- ${pod} logs"
+    "${KUBECTL}" logs "${pod}" -n "${ns}" --all-containers --tail=40 2>/dev/null || true
+  done
+  "${KUBECTL}" get events -n "${ns}" --sort-by='.lastTimestamp' 2>/dev/null | tail -30 || true
+}
+
+verify_teamcity_healthy() {
+  local ns="$1"
+  local pod="$2"
+  local out
+  if ! out=$("${KUBECTL}" get --raw \
+      "/api/v1/namespaces/${ns}/pods/${pod}:8111/proxy/healthCheck/healthy" 2>&1); then
+    dump_namespace_debug "${ns}"
+    echo_error "pod/${pod}: /healthCheck/healthy failed: ${out}"
+  fi
+  echo_info "  pod/${pod} /healthCheck/healthy OK"
+  echo_step_completed
+}
+
+wait_for_teamcity_ready() {
+  local ns="$1"
+  local sts="$2"
+  local timeout="${3:-${READY_TIMEOUT}}"
+
+  echo_info "  waiting up to ${timeout}s for statefulset/${sts} to be Ready"
+  if ! "${KUBECTL}" rollout status "statefulset/${sts}" -n "${ns}" --timeout="${timeout}s"; then
+    dump_namespace_debug "${ns}"
+    echo_error "statefulset/${sts} in ${ns} not Ready within ${timeout}s"
+  fi
+  verify_teamcity_healthy "${ns}" "${sts}-0"
+}
+
+pod_ready() {
+  "${KUBECTL}" get pod "$2" -n "$1" \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null
+}
+
+wait_for_owned_objects_released() {
+  local ns="$1"
+  local uids="$2"
+  local elapsed=0
+  local owned
+  [ -z "${uids}" ] && return 0
+
+  while true; do
+    owned=$("${KUBECTL}" get statefulset,service,ingress,serviceaccount,persistentvolumeclaim -n "${ns}" \
+      -o jsonpath='{range .items[*]}{.kind}/{.metadata.name} {.metadata.deletionTimestamp} {.metadata.ownerReferences[*].uid}{"\n"}{end}' \
+      2>/dev/null | awk -v uids="${uids}" '
+        BEGIN { n = split(uids, u, " "); for (i = 1; i <= n; i++) owner[u[i]] = 1 }
+        { for (i = 2; i <= NF; i++) if ($i in owner) { if ($2 !~ /^[0-9]{4}-/) print $1; break } }')
+    if [ -z "${owned}" ]; then
+      echo_info "  objects owned by the deleted TeamCity are gone or terminating"
+      echo_step_completed
+      return 0
+    fi
+    if [ "${elapsed}" -ge "${DELETE_TIMEOUT}" ]; then
+      dump_namespace_debug "${ns}"
+      echo_error "objects owned by the deleted TeamCity were not garbage collected in ${ns}: $(echo ${owned})"
+    fi
+    sleep 3
+    elapsed=$((elapsed + 3))
+  done
+}
+
+wait_for_teamcity_state() {
+  local ns="$1"
+  local tc="$2"
+  local expected="$3"
+  local elapsed=0
+  local state
+  while true; do
+    state=$("${KUBECTL}" get teamcity "${tc}" -n "${ns}" -o jsonpath='{.status.state}' 2>/dev/null || true)
+    if [ "${state}" == "${expected}" ]; then
+      echo_info "  teamcity/${tc} status.state=${state}"
+      echo_step_completed
+      return 0
+    fi
+    if [ "${elapsed}" -ge 120 ]; then
+      dump_namespace_debug "${ns}"
+      echo_error "teamcity/${tc} status.state='${state}', expected '${expected}' ($("${KUBECTL}" get teamcity "${tc}" -n "${ns}" -o jsonpath='{.status.message}' 2>/dev/null))"
+    fi
+    sleep 3
+    elapsed=$((elapsed + 3))
+  done
+}
+
+statefulset_field() {
+  "${KUBECTL}" get statefulset "$2" -n "$1" -o jsonpath="$3" 2>/dev/null || true
+}
+
+expect_rejected() {
+  local ns="$1"
+  local case_name="$2"
+  local needle="$3"
+  local out
+  if out=$("${KUBECTL}" apply --dry-run=server -n "${ns}" -f - 2>&1); then
+    echo_error "${case_name}: invalid TeamCity was accepted"
+  fi
+  if ! grep -Fq -- "${needle}" <<<"${out}"; then
+    echo_error "${case_name}: rejected for an unexpected reason: ${out}"
+  fi
+  echo_info "  ${case_name}: rejected"
+  echo_step_completed
+}
+
+minimal_teamcity() {
+  local name="$1"
+  local spec_extra="$2"
+  local main_extra="$3"
+  cat <<EOF
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: ${name}
+spec:
+  image: jetbrains/teamcity-server
+${spec_extra}
+  mainNode:
+    name: main-node
+    spec:
+      requests:
+        cpu: "500m"
+        memory: "1000Mi"
+${main_extra}
+  dataDirVolumeClaim:
+    name: data
+    volumeMount:
+      name: data
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+EOF
 }
 
 # Assert that at least $expected instances of a resource type exist.
@@ -488,20 +638,18 @@ EOF
 }
 
 # Clean up a test namespace. Deletes TeamCity CRs first so the operator can
-# run its finaliser; falls back to removing the finaliser if that times out.
+# run its finaliser; fails if that times out or owned objects are left behind.
 cleanup_namespace() {
   local ns="$1"
   echo_step "cleaning up namespace ${ns}"
 
-  if ! "${KUBECTL}" delete teamcity --all -n "${ns}" --timeout=60s 2>/dev/null; then
-    echo_warn "  TeamCity CR deletion timed out – removing finalisers"
-    for tc in $("${KUBECTL}" get teamcity -n "${ns}" -o name 2>/dev/null); do
-      "${KUBECTL}" patch "${tc}" -n "${ns}" --type=json \
-        -p='[{"op":"remove","path":"/metadata/finalizers"}]' 2>/dev/null || true
-    done
-    "${KUBECTL}" delete teamcity --all -n "${ns}" --timeout=30s 2>/dev/null || true
+  local uids
+  uids=$("${KUBECTL}" get teamcity -n "${ns}" -o jsonpath='{.items[*].metadata.uid}' 2>/dev/null || true)
+  if ! "${KUBECTL}" delete teamcity --all -n "${ns}" --timeout="${DELETE_TIMEOUT}s"; then
+    dump_namespace_debug "${ns}"
+    echo_error "TeamCity deletion in ${ns} did not finish within ${DELETE_TIMEOUT}s"
   fi
-
+  wait_for_owned_objects_released "${ns}" "${uids}"
   "${KUBECTL}" delete namespace "${ns}" --wait=false 2>/dev/null || true
 }
 
@@ -523,6 +671,136 @@ run_test() {
 # resources the operator should have created, and cleans up.
 # ============================================================================
 
+test_webhook_rejects_invalid_specs() {
+  local ns="test-webhook-validation"
+  create_namespace "${ns}"
+
+  if ! out=$(minimal_teamcity valid "" "" | "${KUBECTL}" apply --dry-run=server -n "${ns}" -f - 2>&1); then
+    echo_error "valid minimal TeamCity was rejected: ${out}"
+  fi
+  echo_info "  valid minimal TeamCity: accepted"
+  echo_step_completed
+
+  minimal_teamcity xmx "  xmxPercentage: -1" "" \
+    | expect_rejected "${ns}" "negative xmxPercentage" "Xmx percentage cannot be set to 0 or lower"
+
+  minimal_teamcity dup-volumes "  volumes:
+    - name: extra
+      emptyDir: {}
+    - name: extra
+      emptyDir: {}" "" \
+    | expect_rejected "${ns}" "duplicate volume names" "teamcity.spec.volumes[1].name: collides with teamcity.spec.volumes[0].name"
+
+  minimal_teamcity dup-mount-path "  volumes:
+    - name: first
+      emptyDir: {}
+      mount:
+        mountPath: /storage
+" "" \
+    | expect_rejected "${ns}" "volume mount path colliding with the data dir" \
+      "teamcity.spec.volumes[0].mount.mountPath: collides with teamcity.spec.dataDirVolumeClaim.volumeMount.mountPath"
+
+  minimal_teamcity node-data-path "  startupPropertiesConfig:
+    teamcity.node.data.path: /mnt/other" "      nodeDataDirVolumeClaim:
+        name: node-data
+        volumeMount:
+          name: node-data
+          mountPath: /mnt/node-data
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi" \
+    | expect_rejected "${ns}" "node data path set twice" "teamcity.node.data.path is set by nodeDataDirVolumeClaim"
+
+  cleanup_namespace "${ns}"
+}
+
+test_with_service_name_recreate() {
+  local ns="test-sts-recreate"
+  local tc="teamcity-sample-with-svc-recreate"
+  local svc="tc-sample-recreate-svc"
+  local annotation="teamcity.jetbrains.com/allow-sts-recreate"
+  create_namespace "${ns}"
+
+  local sample
+  sample=$(mktemp)
+  sed -e "\|${annotation}|d" -e "/serviceName: ${svc}/d" \
+    "${samplesdir}/_v1beta1_teamcity_with_service_name_recreate.yaml" > "${sample}"
+  apply_sample "${sample}" "${ns}"
+  rm -f "${sample}"
+
+  wait_for_statefulsets "${ns}" 2
+  wait_for_teamcity_ready "${ns}" node
+  wait_for_teamcity_ready "${ns}" secondary-node
+  wait_for_teamcity_state "${ns}" "${tc}" Success
+
+  local main_uid secondary_uid pvc_uid
+  main_uid=$(statefulset_field "${ns}" node '{.metadata.uid}')
+  secondary_uid=$(statefulset_field "${ns}" secondary-node '{.metadata.uid}')
+  pvc_uid=$("${KUBECTL}" get pvc teamcity-node-volume1 -n "${ns}" -o jsonpath='{.metadata.uid}')
+
+  local patch out
+  patch="[{\"op\":\"add\",\"path\":\"/spec/mainNode/spec/serviceName\",\"value\":\"${svc}\"},{\"op\":\"add\",\"path\":\"/spec/secondaryNodes/0/spec/serviceName\",\"value\":\"${svc}\"}]"
+
+  if out=$("${KUBECTL}" patch teamcity "${tc}" -n "${ns}" --type=json -p "${patch}" 2>&1); then
+    echo_error "serviceName change without ${annotation} was accepted"
+  fi
+  if ! grep -Fq "requires annotation ${annotation}" <<<"${out}"; then
+    echo_error "serviceName change rejected for an unexpected reason: ${out}"
+  fi
+  echo_info "  serviceName change without the annotation: rejected"
+  echo_step_completed
+
+  "${KUBECTL}" annotate teamcity "${tc}" -n "${ns}" "${annotation}=true"
+  if ! out=$("${KUBECTL}" patch teamcity "${tc}" -n "${ns}" --type=json -p "${patch}" 2>&1); then
+    echo_error "serviceName change with ${annotation}=true was rejected: ${out}"
+  fi
+  if ! grep -Fq "will be recreated" <<<"${out}"; then
+    echo_error "serviceName change did not warn about the recreate: ${out}"
+  fi
+  echo_info "  serviceName change with the annotation: accepted with a recreate warning"
+  echo_step_completed
+
+  local elapsed=0 sts uid name
+  for sts in node secondary-node; do
+    [ "${sts}" == "node" ] && uid="${main_uid}" || uid="${secondary_uid}"
+    while true; do
+      name=$(statefulset_field "${ns}" "${sts}" '{.spec.serviceName}')
+      if [ "${name}" == "${svc}" ] && [ "$(statefulset_field "${ns}" "${sts}" '{.metadata.uid}')" != "${uid}" ]; then
+        echo_info "  statefulset/${sts} recreated with serviceName ${svc}"
+        echo_step_completed
+        break
+      fi
+      if [ "${elapsed}" -ge "${READY_TIMEOUT}" ]; then
+        dump_namespace_debug "${ns}"
+        echo_error "statefulset/${sts} was not recreated with serviceName ${svc} within ${READY_TIMEOUT}s"
+      fi
+      sleep 3
+      elapsed=$((elapsed + 3))
+    done
+  done
+
+  wait_for_teamcity_ready "${ns}" node
+  wait_for_teamcity_ready "${ns}" secondary-node
+  wait_for_teamcity_state "${ns}" "${tc}" Success
+
+  if [ "$("${KUBECTL}" get pvc teamcity-node-volume1 -n "${ns}" -o jsonpath='{.metadata.uid}')" != "${pvc_uid}" ]; then
+    echo_error "data directory PVC was replaced during the StatefulSet recreate"
+  fi
+  echo_info "  data directory PVC kept across the recreate"
+  echo_step_completed
+
+  if ! "${KUBECTL}" get events -n "${ns}" --field-selector reason=StatefulSetRecreating -o name | grep -q .; then
+    echo_error "no StatefulSetRecreating event was recorded"
+  fi
+  echo_info "  StatefulSetRecreating event recorded"
+  echo_step_completed
+
+  cleanup_namespace "${ns}"
+}
+
 # --- 1. Basic standalone TeamCity ------------------------------------------
 test_basic() {
   local ns="test-basic"
@@ -533,6 +811,8 @@ test_basic() {
 
   verify_resource_exists "${ns}" statefulset 1
   verify_resource_exists "${ns}" pvc 1
+
+  wait_for_teamcity_ready "${ns}" main-node
 
   cleanup_namespace "${ns}"
 }
@@ -552,6 +832,8 @@ test_with_database() {
   verify_resource_exists "${ns}" statefulset 1
   verify_resource_exists "${ns}" deployment 1   # MySQL
   verify_resource_exists "${ns}" pvc 2           # dataDirVolumeClaim + config PVC
+
+  wait_for_teamcity_ready "${ns}" main-node
 
   cleanup_namespace "${ns}"
 }
@@ -720,32 +1002,136 @@ test_with_secondary_node_read_only() {
 
   verify_resource_exists "${ns}" statefulset 2
 
+  wait_for_teamcity_ready "${ns}" main-node
+  wait_for_teamcity_ready "${ns}" secondary-node
+
   cleanup_namespace "${ns}"
 }
 
 # --- 12. TeamCity with zero-downtime upgrade (single node) -----------------
 test_with_zero_downtime_upgrade() {
   local ns="test-zero-downtime"
+  local tc="teamcity-sample-zero-downtime"
+  local main="main-node"
+  local replica="${main}-update-replica"
+  local checkpoint="update-checkpoint-${tc}"
   create_namespace "${ns}"
 
-  apply_sample_with_db \
-    "${samplesdir}/_v1beta1_teamcity_with_zero_downtime_upgrade.yaml" "${ns}"
+  local sample
+  sample=$(mktemp)
+  sed "s|^  image: jetbrains/teamcity-server$|  image: ${ZDU_FROM_IMAGE}|" \
+    "${samplesdir}/_v1beta1_teamcity_with_zero_downtime_upgrade.yaml" > "${sample}"
+  if ! grep -q "^  image: ${ZDU_FROM_IMAGE}$" "${sample}"; then
+    rm -f "${sample}"
+    echo_error "could not pin the zero-downtime sample to ${ZDU_FROM_IMAGE}"
+  fi
+  apply_sample_with_db "${sample}" "${ns}"
+  rm -f "${sample}"
 
   "${KUBECTL}" wait --for=condition=Available deployment/mysql \
-    -n "${ns}" --timeout=180s 2>/dev/null || true
+    -n "${ns}" --timeout=300s
   wait_for_statefulsets "${ns}" 1
-
-  verify_resource_exists "${ns}" statefulset 1
+  wait_for_teamcity_ready "${ns}" "${main}"
 
   # Verify the zero-downtime annotation
   local ann
-  ann=$("${KUBECTL}" get teamcity -n "${ns}" \
-    -o jsonpath='{.items[0].metadata.annotations}' 2>/dev/null)
+  ann=$("${KUBECTL}" get teamcity "${tc}" -n "${ns}" \
+    -o jsonpath='{.metadata.annotations}' 2>/dev/null)
   if [[ "${ann}" != *"zero-downtime"* ]]; then
     echo_error "zero-downtime annotation not found on TeamCity CR"
   fi
-  echo_info "  zero-downtime annotation present"
+
+  local old_uid
+  old_uid=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.metadata.uid}')
+
+  echo_info "  upgrading ${tc} from ${ZDU_FROM_IMAGE} to ${ZDU_TO_IMAGE}"
+  "${KUBECTL}" patch teamcity "${tc}" -n "${ns}" --type=merge \
+    -p "{\"spec\":{\"image\":\"${ZDU_TO_IMAGE}\"}}"
+
+  local stages="" replica_ready=false outages=0 start now stage ready sts_image
+  start=$(date +%s)
+  while true; do
+    now=$(date +%s)
+    if [ $((now - start)) -ge "${ZDU_TIMEOUT}" ]; then
+      dump_namespace_debug "${ns}"
+      echo_error "zero-downtime upgrade did not finish within ${ZDU_TIMEOUT}s (stages seen:${stages:- none})"
+    fi
+
+    stage=$("${KUBECTL}" get configmap "${checkpoint}" -n "${ns}" \
+      -o jsonpath='{.data.stage}' 2>/dev/null || true)
+    if [ -n "${stage}" ] && [[ " ${stages} " != *" ${stage} "* ]]; then
+      stages="${stages} ${stage}"
+      echo_info "  [$((now - start))s] stage ${stage}"
+    fi
+
+    if [ "${replica_ready}" == "false" ] && [ "$(pod_ready "${ns}" "${replica}-0")" == "True" ]; then
+      replica_ready=true
+      echo_info "  [$((now - start))s] ${replica}-0 Ready"
+    fi
+
+    if ready=$("${KUBECTL}" get pods -n "${ns}" -l "app.kubernetes.io/name=${tc}" \
+        -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null); then
+      if ! echo "${ready}" | grep -q True; then
+        outages=$((outages + 1))
+        echo_warn "  [$((now - start))s] no Ready TeamCity pod"
+      fi
+    fi
+
+    sts_image=$("${KUBECTL}" get statefulset "${main}" -n "${ns}" \
+      -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+    if [ -z "${stage}" ] && [ "${sts_image}" == "${ZDU_TO_IMAGE}" ] \
+        && ! "${KUBECTL}" get statefulset "${replica}" -n "${ns}" >/dev/null 2>&1 \
+        && "${KUBECTL}" rollout status "statefulset/${main}" -n "${ns}" --timeout=1s >/dev/null 2>&1; then
+      break
+    fi
+    sleep 3
+  done
+  echo_info "  upgrade finished after $(( $(date +%s) - start ))s, stages seen:${stages:- none}"
   echo_step_completed
+
+  if [ "${replica_ready}" != "true" ]; then
+    dump_namespace_debug "${ns}"
+    echo_error "update replica ${replica}-0 never became Ready, so the upgrade was not zero-downtime"
+  fi
+  if [ "${outages}" -gt 0 ]; then
+    dump_namespace_debug "${ns}"
+    echo_error "no TeamCity pod was Ready in ${outages} sample(s) during the upgrade"
+  fi
+
+  local new_uid pod_image
+  new_uid=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.metadata.uid}')
+  pod_image=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.spec.containers[0].image}')
+  if [ "${new_uid}" == "${old_uid}" ] || [ "${pod_image}" != "${ZDU_TO_IMAGE}" ]; then
+    echo_error "pod/${main}-0 was not replaced with ${ZDU_TO_IMAGE} (image ${pod_image})"
+  fi
+  echo_info "  pod/${main}-0 replaced and running ${pod_image}"
+  echo_step_completed
+  verify_teamcity_healthy "${ns}" "${main}-0"
+
+  echo_info "  starting a second upgrade and deleting ${tc} while it runs"
+  "${KUBECTL}" patch teamcity "${tc}" -n "${ns}" --type=merge \
+    -p "{\"spec\":{\"image\":\"${ZDU_FROM_IMAGE}\"}}"
+  local waited=0
+  until "${KUBECTL}" get configmap "${checkpoint}" -n "${ns}" >/dev/null 2>&1; do
+    if [ "${waited}" -ge 120 ]; then
+      dump_namespace_debug "${ns}"
+      echo_error "checkpoint ${checkpoint} did not appear for the second upgrade"
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  local tc_uid
+  tc_uid=$("${KUBECTL}" get teamcity "${tc}" -n "${ns}" -o jsonpath='{.metadata.uid}')
+  if ! "${KUBECTL}" delete teamcity "${tc}" -n "${ns}" --timeout="${DELETE_TIMEOUT}s"; then
+    dump_namespace_debug "${ns}"
+    echo_error "deleting ${tc} during an upgrade did not finish within ${DELETE_TIMEOUT}s"
+  fi
+  if "${KUBECTL}" get configmap "${checkpoint}" -n "${ns}" >/dev/null 2>&1; then
+    echo_error "checkpoint ${checkpoint} left behind after deleting ${tc} during an upgrade"
+  fi
+  echo_info "  finalizer removed the checkpoint of the interrupted upgrade"
+  echo_step_completed
+  wait_for_owned_objects_released "${ns}" "${tc_uid}"
 
   cleanup_namespace "${ns}"
 }
@@ -916,23 +1302,9 @@ if [ "${skipsetup}" != "true" ]; then
 fi
 
 # Run every example configuration as an isolated test
-run_test test_basic
-run_test test_with_database
-run_test test_with_ingress
-run_test test_with_init_containers
-run_test test_with_node_selector
-run_test test_with_service
-run_test test_with_serviceaccount
-run_test test_with_startup_properties
-run_test test_with_affinity
-run_test test_with_secondary_node
-run_test test_with_secondary_node_read_only
-run_test test_with_zero_downtime_upgrade
-run_test test_with_secondary_node_zero_downtime
-run_test test_with_node_data_dir
-run_test test_with_node_data_dir_adopt
-run_test test_with_custom_mounts
-run_test test_with_node_volume_claims_adopt
-run_test test_with_stop_wait_time
+ALL_TESTS="test_webhook_rejects_invalid_specs test_basic test_with_database test_with_ingress test_with_init_containers test_with_node_selector test_with_service test_with_serviceaccount test_with_startup_properties test_with_affinity test_with_secondary_node test_with_secondary_node_read_only test_with_zero_downtime_upgrade test_with_secondary_node_zero_downtime test_with_node_data_dir test_with_node_data_dir_adopt test_with_custom_mounts test_with_node_volume_claims_adopt test_with_stop_wait_time test_with_service_name_recreate"
+for t in ${TESTS:-${ALL_TESTS}}; do
+  run_test "${t}"
+done
 
 echo_success "All integration tests passed!"
