@@ -16,6 +16,20 @@ KEEP_CLUSTERS="${KEEP_CLUSTERS:-false}"
 STS_TIMEOUT="${STS_TIMEOUT:-600}"
 PRELOAD_IMAGES="${PRELOAD_IMAGES:-jetbrains/teamcity-server:latest jetbrains/teamcity-server:2026.2 mysql:8 busybox:latest busybox:1.28 busybox:1.36}"
 
+if [ -z "${LOAD_PULLED_IMAGES:-}" ]; then
+  if docker info -f '{{range .DriverStatus}}{{index . 0}}={{index . 1}} {{end}}' 2>/dev/null | grep -q 'driver-type=io.containerd.snapshotter'; then
+    LOAD_PULLED_IMAGES=false
+  else
+    LOAD_PULLED_IMAGES=true
+  fi
+fi
+if [ "${LOAD_PULLED_IMAGES}" != "true" ]; then
+  echo "Docker uses the containerd image store: clusters pull registry images themselves"
+  PULLED_IMAGES=""
+else
+  PULLED_IMAGES="${OLD_IMG} ${PRELOAD_IMAGES}"
+fi
+
 mkdir -p "${LOGDIR}"
 rm -f "${LOGDIR}"/*.result
 
@@ -45,7 +59,7 @@ load_image() {
 
 load_images() {
   local provider="$1" name="$2" image
-  for image in "${IMG}" "${OLD_IMG}" ${PRELOAD_IMAGES}; do
+  for image in "${IMG}" ${PULLED_IMAGES}; do
     load_image "${provider}" "${name}" "${image}" || return 1
   done
 }
@@ -103,7 +117,7 @@ run_one() {
 
 echo "building ${IMG}"
 docker build -q -t "${IMG}" "${projectdir}" >/dev/null || { echo "image build failed"; exit 1; }
-for image in "${OLD_IMG}" ${PRELOAD_IMAGES}; do
+for image in ${PULLED_IMAGES}; do
   echo "pulling ${image}"
   docker pull -q "${image}" >/dev/null || { echo "cannot pull ${image}"; exit 1; }
 done

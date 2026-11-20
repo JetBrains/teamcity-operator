@@ -32,7 +32,7 @@ object E2eSteps {
         set -euo pipefail
         export PATH="${'$'}PWD/.e2e-bin:${'$'}PATH"
         RC=0
-        MATRIX="kind:%k8s.node%" PARALLEL=1 LOGDIR="${'$'}PWD/.e2e-logs" bash test/e2e/k8s_matrix.sh || RC=${'$'}?
+        MATRIX="kind:%k8s.node%" PARALLEL=1 LOAD_PULLED_IMAGES=false LOGDIR="${'$'}PWD/.e2e-logs" bash test/e2e/k8s_matrix.sh || RC=${'$'}?
         for f in .e2e-logs/*.log; do
           echo "##teamcity[blockOpened name='${'$'}(basename "${'$'}f")']"
           sed 's/\x1b\[[0-9;]*m//g' "${'$'}f"

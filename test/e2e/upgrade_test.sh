@@ -58,6 +58,11 @@ snapshot() {
   } | sort
 }
 
+if ! git -C "${projectdir}" rev-parse -q --verify "refs/tags/${OLD_REF}^{commit}" >/dev/null; then
+  git -C "${projectdir}" fetch -q --depth=1 "${OLD_REPO:-https://github.com/JetBrains/teamcity-operator.git}" "refs/tags/${OLD_REF}:refs/tags/${OLD_REF}" \
+    || fail "cannot fetch ${OLD_REF}"
+fi
+
 mkdir -p "${workdir}/old" "${workdir}/new"
 git -C "${projectdir}" archive "${OLD_REF}" config | tar -x -C "${workdir}/old"
 cp -R "${projectdir}/config/." "${workdir}/new/config/"
