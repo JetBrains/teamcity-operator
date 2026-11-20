@@ -46,7 +46,7 @@ var (
 	dataDirPVCAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
 	dataDirPVCStorageClassName = "standard"
 	dataDirPVCVolumeMode       = corev1.PersistentVolumeFilesystem
-	dataDirPVCResources        = corev1.ResourceRequirements{
+	dataDirPVCResources        = corev1.VolumeResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceStorage: resource.MustParse("1Gi"),
 		},
@@ -209,7 +209,7 @@ func getAdditionalPVC() CustomPersistentVolumeClaim {
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteMany"},
-			Resources:        corev1.ResourceRequirements{},
+			Resources:        corev1.VolumeResourceRequirements{},
 			StorageClassName: pointer.String("standard"),
 			VolumeMode:       &dataDirPVCVolumeMode,
 		},
@@ -228,7 +228,7 @@ func getNodeDataDirClaim(name string) *CustomPersistentVolumeClaim {
 			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"},
 			StorageClassName: &storageClass,
 			VolumeMode:       &dataDirPVCVolumeMode,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
 				},
@@ -265,7 +265,7 @@ func getNodePVC(name string, storageClass string) CustomPersistentVolumeClaim {
 			AccessModes:      []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"},
 			StorageClassName: &storageClass,
 			VolumeMode:       &dataDirPVCVolumeMode,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
 				},
