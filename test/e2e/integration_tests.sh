@@ -42,6 +42,10 @@ CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.14.3}"
 KUBECTL="${KUBECTL:-kubectl}"
 KIND="${KIND:-kind}"
 KUSTOMIZE="${projectdir}/bin/kustomize"
+READY_TIMEOUT="${READY_TIMEOUT:-900}"
+ZDU_TIMEOUT="${ZDU_TIMEOUT:-1800}"
+ZDU_FROM_IMAGE="${ZDU_FROM_IMAGE:-jetbrains/teamcity-server:2026.2.1}"
+ZDU_TO_IMAGE="${ZDU_TO_IMAGE:-jetbrains/teamcity-server:2026.2.2}"
 
 # Base64 value of "jdbc:mysql://mysql.default:3306/teamcity" used in sample
 # files. Replaced per-namespace so that in-namespace MySQL is reachable.
@@ -235,6 +239,50 @@ wait_for_statefulsets() {
     sleep 5
     elapsed=$((elapsed + 5))
   done
+}
+
+dump_namespace_debug() {
+  local ns="$1"
+  echo_warn "--- Debug info for namespace ${ns} ---"
+  "${KUBECTL}" get teamcity,statefulset,pod,configmap -n "${ns}" -o wide 2>/dev/null || true
+  "${KUBECTL}" describe pods -n "${ns}" 2>/dev/null | tail -80 || true
+  local pod
+  for pod in $("${KUBECTL}" get pods -n "${ns}" -o name 2>/dev/null); do
+    echo "--- ${pod} logs"
+    "${KUBECTL}" logs "${pod}" -n "${ns}" --all-containers --tail=40 2>/dev/null || true
+  done
+  "${KUBECTL}" get events -n "${ns}" --sort-by='.lastTimestamp' 2>/dev/null | tail -30 || true
+}
+
+verify_teamcity_healthy() {
+  local ns="$1"
+  local pod="$2"
+  local out
+  if ! out=$("${KUBECTL}" get --raw \
+      "/api/v1/namespaces/${ns}/pods/${pod}:8111/proxy/healthCheck/healthy" 2>&1); then
+    dump_namespace_debug "${ns}"
+    echo_error "pod/${pod}: /healthCheck/healthy failed: ${out}"
+  fi
+  echo_info "  pod/${pod} /healthCheck/healthy OK"
+  echo_step_completed
+}
+
+wait_for_teamcity_ready() {
+  local ns="$1"
+  local sts="$2"
+  local timeout="${3:-${READY_TIMEOUT}}"
+
+  echo_info "  waiting up to ${timeout}s for statefulset/${sts} to be Ready"
+  if ! "${KUBECTL}" rollout status "statefulset/${sts}" -n "${ns}" --timeout="${timeout}s"; then
+    dump_namespace_debug "${ns}"
+    echo_error "statefulset/${sts} in ${ns} not Ready within ${timeout}s"
+  fi
+  verify_teamcity_healthy "${ns}" "${sts}-0"
+}
+
+pod_ready() {
+  "${KUBECTL}" get pod "$2" -n "$1" \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null
 }
 
 # Assert that at least $expected instances of a resource type exist.
@@ -534,6 +582,8 @@ test_basic() {
   verify_resource_exists "${ns}" statefulset 1
   verify_resource_exists "${ns}" pvc 1
 
+  wait_for_teamcity_ready "${ns}" main-node
+
   cleanup_namespace "${ns}"
 }
 
@@ -552,6 +602,8 @@ test_with_database() {
   verify_resource_exists "${ns}" statefulset 1
   verify_resource_exists "${ns}" deployment 1   # MySQL
   verify_resource_exists "${ns}" pvc 2           # dataDirVolumeClaim + config PVC
+
+  wait_for_teamcity_ready "${ns}" main-node
 
   cleanup_namespace "${ns}"
 }
@@ -720,32 +772,111 @@ test_with_secondary_node_read_only() {
 
   verify_resource_exists "${ns}" statefulset 2
 
+  wait_for_teamcity_ready "${ns}" main-node
+  wait_for_teamcity_ready "${ns}" secondary-node
+
   cleanup_namespace "${ns}"
 }
 
 # --- 12. TeamCity with zero-downtime upgrade (single node) -----------------
 test_with_zero_downtime_upgrade() {
   local ns="test-zero-downtime"
+  local tc="teamcity-sample-zero-downtime"
+  local main="main-node"
+  local replica="${main}-update-replica"
+  local checkpoint="update-checkpoint-${tc}"
   create_namespace "${ns}"
 
-  apply_sample_with_db \
-    "${samplesdir}/_v1beta1_teamcity_with_zero_downtime_upgrade.yaml" "${ns}"
+  local sample
+  sample=$(mktemp)
+  sed "s|^  image: jetbrains/teamcity-server$|  image: ${ZDU_FROM_IMAGE}|" \
+    "${samplesdir}/_v1beta1_teamcity_with_zero_downtime_upgrade.yaml" > "${sample}"
+  if ! grep -q "^  image: ${ZDU_FROM_IMAGE}$" "${sample}"; then
+    rm -f "${sample}"
+    echo_error "could not pin the zero-downtime sample to ${ZDU_FROM_IMAGE}"
+  fi
+  apply_sample_with_db "${sample}" "${ns}"
+  rm -f "${sample}"
 
   "${KUBECTL}" wait --for=condition=Available deployment/mysql \
-    -n "${ns}" --timeout=180s 2>/dev/null || true
+    -n "${ns}" --timeout=300s
   wait_for_statefulsets "${ns}" 1
-
-  verify_resource_exists "${ns}" statefulset 1
+  wait_for_teamcity_ready "${ns}" "${main}"
 
   # Verify the zero-downtime annotation
   local ann
-  ann=$("${KUBECTL}" get teamcity -n "${ns}" \
-    -o jsonpath='{.items[0].metadata.annotations}' 2>/dev/null)
+  ann=$("${KUBECTL}" get teamcity "${tc}" -n "${ns}" \
+    -o jsonpath='{.metadata.annotations}' 2>/dev/null)
   if [[ "${ann}" != *"zero-downtime"* ]]; then
     echo_error "zero-downtime annotation not found on TeamCity CR"
   fi
-  echo_info "  zero-downtime annotation present"
+
+  local old_uid
+  old_uid=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.metadata.uid}')
+
+  echo_info "  upgrading ${tc} from ${ZDU_FROM_IMAGE} to ${ZDU_TO_IMAGE}"
+  "${KUBECTL}" patch teamcity "${tc}" -n "${ns}" --type=merge \
+    -p "{\"spec\":{\"image\":\"${ZDU_TO_IMAGE}\"}}"
+
+  local stages="" replica_ready=false outages=0 start now stage ready sts_image
+  start=$(date +%s)
+  while true; do
+    now=$(date +%s)
+    if [ $((now - start)) -ge "${ZDU_TIMEOUT}" ]; then
+      dump_namespace_debug "${ns}"
+      echo_error "zero-downtime upgrade did not finish within ${ZDU_TIMEOUT}s (stages seen:${stages:- none})"
+    fi
+
+    stage=$("${KUBECTL}" get configmap "${checkpoint}" -n "${ns}" \
+      -o jsonpath='{.data.stage}' 2>/dev/null || true)
+    if [ -n "${stage}" ] && [[ " ${stages} " != *" ${stage} "* ]]; then
+      stages="${stages} ${stage}"
+      echo_info "  [$((now - start))s] stage ${stage}"
+    fi
+
+    if [ "${replica_ready}" == "false" ] && [ "$(pod_ready "${ns}" "${replica}-0")" == "True" ]; then
+      replica_ready=true
+      echo_info "  [$((now - start))s] ${replica}-0 Ready"
+    fi
+
+    if ready=$("${KUBECTL}" get pods -n "${ns}" -l "app.kubernetes.io/name=${tc}" \
+        -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null); then
+      if ! echo "${ready}" | grep -q True; then
+        outages=$((outages + 1))
+        echo_warn "  [$((now - start))s] no Ready TeamCity pod"
+      fi
+    fi
+
+    sts_image=$("${KUBECTL}" get statefulset "${main}" -n "${ns}" \
+      -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+    if [ -z "${stage}" ] && [ "${sts_image}" == "${ZDU_TO_IMAGE}" ] \
+        && ! "${KUBECTL}" get statefulset "${replica}" -n "${ns}" >/dev/null 2>&1 \
+        && "${KUBECTL}" rollout status "statefulset/${main}" -n "${ns}" --timeout=1s >/dev/null 2>&1; then
+      break
+    fi
+    sleep 3
+  done
+  echo_info "  upgrade finished after $(( $(date +%s) - start ))s, stages seen:${stages:- none}"
   echo_step_completed
+
+  if [ "${replica_ready}" != "true" ]; then
+    dump_namespace_debug "${ns}"
+    echo_error "update replica ${replica}-0 never became Ready, so the upgrade was not zero-downtime"
+  fi
+  if [ "${outages}" -gt 0 ]; then
+    dump_namespace_debug "${ns}"
+    echo_error "no TeamCity pod was Ready in ${outages} sample(s) during the upgrade"
+  fi
+
+  local new_uid pod_image
+  new_uid=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.metadata.uid}')
+  pod_image=$("${KUBECTL}" get pod "${main}-0" -n "${ns}" -o jsonpath='{.spec.containers[0].image}')
+  if [ "${new_uid}" == "${old_uid}" ] || [ "${pod_image}" != "${ZDU_TO_IMAGE}" ]; then
+    echo_error "pod/${main}-0 was not replaced with ${ZDU_TO_IMAGE} (image ${pod_image})"
+  fi
+  echo_info "  pod/${main}-0 replaced and running ${pod_image}"
+  echo_step_completed
+  verify_teamcity_healthy "${ns}" "${main}-0"
 
   cleanup_namespace "${ns}"
 }
@@ -916,23 +1047,9 @@ if [ "${skipsetup}" != "true" ]; then
 fi
 
 # Run every example configuration as an isolated test
-run_test test_basic
-run_test test_with_database
-run_test test_with_ingress
-run_test test_with_init_containers
-run_test test_with_node_selector
-run_test test_with_service
-run_test test_with_serviceaccount
-run_test test_with_startup_properties
-run_test test_with_affinity
-run_test test_with_secondary_node
-run_test test_with_secondary_node_read_only
-run_test test_with_zero_downtime_upgrade
-run_test test_with_secondary_node_zero_downtime
-run_test test_with_node_data_dir
-run_test test_with_node_data_dir_adopt
-run_test test_with_custom_mounts
-run_test test_with_node_volume_claims_adopt
-run_test test_with_stop_wait_time
+ALL_TESTS="test_basic test_with_database test_with_ingress test_with_init_containers test_with_node_selector test_with_service test_with_serviceaccount test_with_startup_properties test_with_affinity test_with_secondary_node test_with_secondary_node_read_only test_with_zero_downtime_upgrade test_with_secondary_node_zero_downtime test_with_node_data_dir test_with_node_data_dir_adopt test_with_custom_mounts test_with_node_volume_claims_adopt test_with_stop_wait_time"
+for t in ${TESTS:-${ALL_TESTS}}; do
+  run_test "${t}"
+done
 
 echo_success "All integration tests passed!"
