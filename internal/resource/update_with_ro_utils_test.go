@@ -23,6 +23,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 								"cpu":    resource.MustParse("1000m"),
 								"memory": resource.MustParse("2Gi"),
 							},
+							ServiceName: "main-headless-svc",
 						},
 					},
 				},
@@ -33,6 +34,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 			Expect(roNode.Name).To(Equal("main-node-update-replica"))
 			Expect(roNode.Spec.Requests["cpu"]).To(Equal(resource.MustParse("1000m")))
 			Expect(roNode.Spec.Requests["memory"]).To(Equal(resource.MustParse("2Gi")))
+			Expect(roNode.Spec.ServiceName).To(Equal("main-headless-svc"))
 		})
 	})
 
@@ -113,6 +115,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 								"cpu":    resource.MustParse("500m"),
 								"memory": resource.MustParse("1Gi"),
 							},
+							ServiceName: "main-headless-svc",
 							NodeDataDirVolumeClaim: &CustomPersistentVolumeClaim{
 								Name: "node-data-dir-main-node",
 								VolumeMount: v12.VolumeMount{
@@ -160,6 +163,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 				}
 			}
 			Expect(serverOpts).To(ContainSubstring("-Dteamcity.node.data.path=/mnt/node-data-dir"))
+			Expect(serverOpts).To(ContainSubstring("-Dteamcity.server.rootURL=http://$(POD_NAME).main-headless-svc.$(POD_NAMESPACE).svc"))
 		})
 		It("replaces every per-node claim with emptyDir", func() {
 			scheme := runtime.NewScheme()
