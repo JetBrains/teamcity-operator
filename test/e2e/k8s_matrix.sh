@@ -14,7 +14,7 @@ MINIKUBE_MEMORY="${MINIKUBE_MEMORY:-6g}"
 LOGDIR="${LOGDIR:-${TMPDIR:-/tmp}/teamcity-operator-e2e}"
 KEEP_CLUSTERS="${KEEP_CLUSTERS:-false}"
 STS_TIMEOUT="${STS_TIMEOUT:-600}"
-PRELOAD_IMAGES="${PRELOAD_IMAGES:-jetbrains/teamcity-server:latest jetbrains/teamcity-server:2026.2 mysql:8 busybox:latest busybox:1.28 busybox:1.36}"
+PRELOAD_IMAGES="${PRELOAD_IMAGES:-jetbrains/teamcity-server:latest jetbrains/teamcity-server:2026.2 jetbrains/teamcity-server:2026.2.1 jetbrains/teamcity-server:2026.2.2 mysql:8 busybox:latest busybox:1.28 busybox:1.36}"
 
 if [ -z "${LOAD_PULLED_IMAGES:-}" ]; then
   if docker info -f '{{range .DriverStatus}}{{index . 0}}={{index . 1}} {{end}}' 2>/dev/null | grep -q 'driver-type=io.containerd.snapshotter'; then
