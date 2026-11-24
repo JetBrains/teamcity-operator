@@ -9,6 +9,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.dockerRegistryConnecti
 import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.matrix
+import util.ReleaseGuard
 
 object BuildDockerImages : BuildType({
     name = "Build Docker Images"
@@ -31,6 +32,11 @@ object BuildDockerImages : BuildType({
     }
 
     steps {
+        script {
+            name = "Refuse an already published version"
+            id = "Refuse_published_version"
+            scriptContent = ReleaseGuard.refuseExistingVersionScriptContent()
+        }
         script {
             name = "Build and push Docker image"
             id = "Build_and_push_docker_image"
