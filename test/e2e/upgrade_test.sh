@@ -3,7 +3,7 @@ set -euo pipefail
 
 projectdir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KUBECTL="${KUBECTL:-kubectl}"
-OLD_REF="${OLD_REF:-0.0.28}"
+OLD_REF="${OLD_REF:-0.0.27}"
 OLD_IMG="${OLD_IMG:-jetbrains/teamcity-operator:${OLD_REF}}"
 IMG="${IMG:-jetbrains/teamcity-operator:e2e-test}"
 SETTLE_SECONDS="${SETTLE_SECONDS:-60}"
