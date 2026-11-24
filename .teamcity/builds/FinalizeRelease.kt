@@ -12,6 +12,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.perfmon
 import jetbrains.buildServer.configs.kotlin.buildFeatures.sshAgent
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.vcs
+import util.ReleaseGuard
 
 object FinalizeRelease : BuildType({
     name = "Finalize Release"
@@ -46,6 +47,11 @@ object FinalizeRelease : BuildType({
 
     steps {
         script {
+            name = "Reserve the release tag"
+            id = "Push_tags"
+            scriptContent = ReleaseGuard.reserveTagScriptContent()
+        }
+        script {
             name = "Create and push multi-arch manifest"
             id = "Create_multiarch_manifest"
             scriptContent = """
@@ -57,17 +63,6 @@ object FinalizeRelease : BuildType({
                 
                 echo "##teamcity[setParameter name='docker_image_full' value='%docker_image%:%predicted_version%']"
                 echo "Multi-arch manifest pushed successfully"
-            """.trimIndent()
-        }
-        script {
-            name = "Push git tags"
-            id = "Push_tags"
-            scriptContent = """
-                mkdir -p ~/.ssh && chmod 700 ~/.ssh
-                ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-                git remote set-url origin git@github.com:JetBrains/teamcity-operator.git
-                git tag %predicted_version%
-                git push --tags
             """.trimIndent()
         }
         script {
