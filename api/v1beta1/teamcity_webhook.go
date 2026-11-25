@@ -17,13 +17,13 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/structured-merge-diff/v4/typed"
+	"sigs.k8s.io/structured-merge-diff/v6/typed"
 	"strings"
 )
 
@@ -51,14 +51,35 @@ var validMainNodeResponsibilities = allTeamCityResponsibilities
 var teamcitylog = logf.Log.WithName("teamcity-resource")
 
 func (instance *TeamCity) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(instance).
+	return ctrl.NewWebhookManagedBy(mgr, instance).
+		WithDefaulter(teamCityAdmission{}).
+		WithValidator(teamCityAdmission{}).
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/mutate-jetbrains-com-v1beta1-teamcity,mutating=true,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=mv1beta1teamcity.kb.io,admissionReviewVersions=v1
+type teamCityAdmission struct{}
 
-var _ webhook.Defaulter = &TeamCity{}
+var _ admission.Defaulter[*TeamCity] = teamCityAdmission{}
+var _ admission.Validator[*TeamCity] = teamCityAdmission{}
+
+func (teamCityAdmission) Default(_ context.Context, obj *TeamCity) error {
+	obj.Default()
+	return nil
+}
+
+func (teamCityAdmission) ValidateCreate(_ context.Context, obj *TeamCity) (admission.Warnings, error) {
+	return obj.ValidateCreate()
+}
+
+func (teamCityAdmission) ValidateUpdate(_ context.Context, oldObj, newObj *TeamCity) (admission.Warnings, error) {
+	return newObj.ValidateUpdate(oldObj)
+}
+
+func (teamCityAdmission) ValidateDelete(_ context.Context, obj *TeamCity) (admission.Warnings, error) {
+	return obj.ValidateDelete()
+}
+
+//+kubebuilder:webhook:path=/mutate-jetbrains-com-v1beta1-teamcity,mutating=true,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=mv1beta1teamcity.kb.io,admissionReviewVersions=v1
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (instance *TeamCity) Default() {
@@ -79,8 +100,6 @@ func defaultVolumeMountNames(volumes []TeamCityVolume) {
 }
 
 //+kubebuilder:webhook:path=/validate-jetbrains-com-v1beta1-teamcity,mutating=false,failurePolicy=fail,sideEffects=None,groups=jetbrains.com,resources=teamcities,verbs=create;update,versions=v1beta1,name=vv1beta1teamcity.kb.io,admissionReviewVersions=v1
-
-var _ webhook.Validator = &TeamCity{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (instance *TeamCity) ValidateCreate() (admission.Warnings, error) {

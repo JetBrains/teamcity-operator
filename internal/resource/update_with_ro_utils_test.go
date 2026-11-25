@@ -120,7 +120,7 @@ var _ = Describe("UpdateWithROUtils", func() {
 									MountPath: "/mnt/node-data-dir",
 								},
 								Spec: v12.PersistentVolumeClaimSpec{
-									Resources: v12.ResourceRequirements{
+									Resources: v12.VolumeResourceRequirements{
 										Requests: v12.ResourceList{
 											v12.ResourceStorage: resource.MustParse("1Gi"),
 										},

@@ -29,7 +29,7 @@ var _ = Describe("TeamCity controller", func() {
 			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
 			pvcStorageClassName = "standard"
 			pvcVolumeMode       = corev1.PersistentVolumeFilesystem
-			pvcResources        = corev1.ResourceRequirements{
+			pvcResources        = corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
 				},
@@ -120,7 +120,7 @@ var _ = Describe("TeamCity controller", func() {
 			pvcAccessMode       = []corev1.PersistentVolumeAccessMode{"ReadWriteMany"}
 			pvcStorageClassName = "standard"
 			pvcVolumeMode       = corev1.PersistentVolumeFilesystem
-			pvcResources        = corev1.ResourceRequirements{
+			pvcResources        = corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
 				},
