@@ -152,7 +152,21 @@ func (in *NodeSpec) DeepCopyInto(out *NodeSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.Tolerations != nil {
+		in, out := &in.Tolerations, &out.Tolerations
+		*out = make([]v1.Toleration, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	in.Affinity.DeepCopyInto(&out.Affinity)
+	if in.TopologySpreadConstraints != nil {
+		in, out := &in.TopologySpreadConstraints, &out.TopologySpreadConstraints
+		*out = make([]v1.TopologySpreadConstraint, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Responsibilities != nil {
 		in, out := &in.Responsibilities, &out.Responsibilities
 		*out = make([]string, len(*in))
