@@ -2,6 +2,7 @@ package resource
 
 import (
 	"fmt"
+
 	. "git.jetbrains.team/tch/teamcity-operator/api/v1beta1"
 	"git.jetbrains.team/tch/teamcity-operator/internal/metadata"
 	v1 "k8s.io/api/apps/v1"
@@ -22,7 +23,8 @@ func BuildRoNode(instance *TeamCity, name string) Node {
 	node := Node{
 		Name: name,
 		Spec: NodeSpec{
-			Requests: instance.Spec.MainNode.Spec.Requests,
+			Requests:    instance.Spec.MainNode.Spec.Requests,
+			ServiceName: instance.Spec.MainNode.Spec.ServiceName,
 		},
 	}
 	if instance.Spec.MainNode.Spec.NodeDataDirVolumeClaim != nil {
