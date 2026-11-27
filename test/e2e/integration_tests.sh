@@ -1286,6 +1286,28 @@ test_with_stop_wait_time() {
   cleanup_namespace "${ns}"
 }
 
+# --- 19. TeamCity with topology spread constraints -------------------------
+test_with_topology_spread_constraints() {
+  local ns="test-topology-spread"
+  create_namespace "${ns}"
+
+  apply_sample "${samplesdir}/_v1beta1_teamcity_with_topology_spread_constraints.yaml" "${ns}"
+  wait_for_statefulsets "${ns}" 1
+
+  verify_resource_exists "${ns}" statefulset 1
+
+  local topology_key
+  topology_key=$(statefulset_field "${ns}" main-node \
+    '{.spec.template.spec.topologySpreadConstraints[0].topologyKey}')
+  if [ "${topology_key}" != "kubernetes.io/hostname" ]; then
+    echo_error "StatefulSet main-node: topologySpreadConstraints[0].topologyKey='${topology_key}', expected kubernetes.io/hostname"
+  fi
+  echo_info "  sts/main-node spreads on kubernetes.io/hostname"
+  echo_step_completed
+
+  cleanup_namespace "${ns}"
+}
+
 # ========================== Main ============================================
 
 check_prerequisites
@@ -1302,7 +1324,7 @@ if [ "${skipsetup}" != "true" ]; then
 fi
 
 # Run every example configuration as an isolated test
-ALL_TESTS="test_webhook_rejects_invalid_specs test_basic test_with_database test_with_ingress test_with_init_containers test_with_node_selector test_with_service test_with_serviceaccount test_with_startup_properties test_with_affinity test_with_secondary_node test_with_secondary_node_read_only test_with_zero_downtime_upgrade test_with_secondary_node_zero_downtime test_with_node_data_dir test_with_node_data_dir_adopt test_with_custom_mounts test_with_node_volume_claims_adopt test_with_stop_wait_time test_with_service_name_recreate"
+ALL_TESTS="test_webhook_rejects_invalid_specs test_basic test_with_database test_with_ingress test_with_init_containers test_with_node_selector test_with_service test_with_serviceaccount test_with_startup_properties test_with_affinity test_with_secondary_node test_with_secondary_node_read_only test_with_zero_downtime_upgrade test_with_secondary_node_zero_downtime test_with_node_data_dir test_with_node_data_dir_adopt test_with_custom_mounts test_with_node_volume_claims_adopt test_with_stop_wait_time test_with_topology_spread_constraints test_with_service_name_recreate"
 for t in ${TESTS:-${ALL_TESTS}}; do
   run_test "${t}"
 done

@@ -67,6 +67,7 @@ Each manifest under `config/samples/v1beta1/` includes a header comment with an 
 | `_v1beta1_teamcity_with_stop_wait_time.yaml` | Graceful stop wait time (`spec.stopWaitTimeSeconds`) |
 | `_v1beta1_teamcity_with_node_selector.yaml` | Node selector |
 | `_v1beta1_teamcity_with_affinity.yaml` | Pod affinity |
+| `_v1beta1_teamcity_with_topology_spread_constraints.yaml` | Topology spread constraints |
 | `_v1beta1_teamcity_with_service.yaml` | Headless Service + `serviceName` (new deployment) |
 | `_v1beta1_teamcity_with_service_name_recreate.yaml` | `serviceName` change on existing deployment |
 | `_v1beta1_teamcity_with_secondary_node.yaml` | Multi-node with responsibilities |
