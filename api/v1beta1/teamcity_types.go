@@ -90,6 +90,11 @@ type NodeSpec struct {
 
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
+
+	// PriorityClassName is the name of the PriorityClass for the pod.
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+
 	Affinity v1.Affinity `json:"affinity,omitempty"`
 
 	TopologySpreadConstraints []v1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`

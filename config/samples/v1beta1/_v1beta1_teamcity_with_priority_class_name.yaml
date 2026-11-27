@@ -1,0 +1,43 @@
+# TeamCity with priorityClassName on the main node (multi-document).
+#
+# Creates a PriorityClass and sets spec.mainNode.spec.priorityClassName so the
+# pod is scheduled with it (for example to protect it from eviction). The
+# PriorityClass must exist before the pod is created, otherwise the pod is
+# rejected.
+#
+# Apply:
+#   kubectl apply -f config/samples/v1beta1/_v1beta1_teamcity_with_priority_class_name.yaml
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: teamcity-priority
+value: 1000000
+description: "Priority for TeamCity server nodes."
+---
+apiVersion: jetbrains.com/v1beta1
+kind: TeamCity
+metadata:
+  name: teamcity-sample-with-priority-class-name
+  namespace: default
+  finalizers:
+    - "teamcity.jetbrains.com/finalizer"
+spec:
+  image: jetbrains/teamcity-server
+  mainNode:
+   name: main-node
+   spec:
+    requests:
+      cpu: "1000m"
+      memory: "2500Mi"
+    priorityClassName: teamcity-priority
+  dataDirVolumeClaim:
+    name: teamcity-node-volume1
+    volumeMount:
+      name: teamcity-node-volume1
+      mountPath: /storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
