@@ -552,6 +552,22 @@ var _ = Describe("StatefulSet", func() {
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(getNodeSelector()))
 		})
 	})
+	Context("TeamCity with priority class name", func() {
+		BeforeEach(func() {
+			BeforeEachBuild(func(teamcity *TeamCity) {
+				teamcity.Spec.MainNode.Spec.PriorityClassName = getPriorityClassName()
+			})
+		})
+		It("sets priority class name correctly", func() {
+			obj, err := DefaultStatefulSetBuilder.BuildObjectList()
+			Expect(err).NotTo(HaveOccurred())
+			stsObject := obj[0]
+			err = DefaultStatefulSetBuilder.Update(stsObject)
+			Expect(err).NotTo(HaveOccurred())
+			statefulSet := stsObject.(*v1.StatefulSet)
+			Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(getPriorityClassName()))
+		})
+	})
 	Context("TeamCity with affinity", func() {
 		BeforeEach(func() {
 			BeforeEachBuild(func(teamcity *TeamCity) {

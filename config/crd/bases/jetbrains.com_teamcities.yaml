@@ -4397,6 +4397,10 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      priorityClassName:
+                        description: PriorityClassName is the name of the PriorityClass
+                          for the pod.
+                        type: string
                       readinessProbeSettings:
                         default:
                           failureThreshold: 3
@@ -10909,6 +10913,10 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        priorityClassName:
+                          description: PriorityClassName is the name of the PriorityClass
+                            for the pod.
+                          type: string
                         readinessProbeSettings:
                           default:
                             failureThreshold: 3

@@ -90,6 +90,9 @@ type NodeSpec struct {
 
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
+	// PriorityClassName is the name of the PriorityClass for the pod.
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+
 	Affinity v1.Affinity `json:"affinity,omitempty"`
 
 	// ServiceName is the name of the service that governs this StatefulSet.

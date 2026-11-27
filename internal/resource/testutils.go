@@ -142,6 +142,10 @@ func getNodeSelector() map[string]string {
 	}
 }
 
+func getPriorityClassName() string {
+	return "teamcity-priority"
+}
+
 func getAffinity() corev1.Affinity {
 	return corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
